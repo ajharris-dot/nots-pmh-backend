@@ -1,11 +1,8 @@
 const express = require('express');
 const app = express();
-const port = process.env.PORT || 3000;
 
-app.get("/", (req, res) => {
-  res.send("NOTS PMH API is running!");
-});
+app.get('/healthz', (req, res) => res.status(200).json({ ok: true }));
+app.get('/', (req, res) => res.send('NOTS PMH API is running!'));
 
-app.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
-});
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
