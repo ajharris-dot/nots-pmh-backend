@@ -21,10 +21,9 @@
     <h2>Add Position</h2>
     <form id="createForm">
       <div class="row">
+        <label>Job Title <input name="title" required /></label>
         <label>Department <input name="department" /></label>
         <label>Due Date <input name="due_date" type="date" /></label>
-        <label class="flex">Job Number <input name="job_number" class="wide" /></label>
-
       </div>
       <div class="row">
         <label class="flex">Job Number <input name="job_number" class="wide" /></label>
@@ -39,12 +38,18 @@
   <section class="card">
     <div class="row between">
       <h2>All Positions</h2>
-      <input id="search" placeholder="Search title/department/employee" />
+      <input id="search" placeholder="Search job # / title / department / employee" />
     </div>
     <table id="jobs">
       <thead>
         <tr>
-          <th>Position</th><th>Department</th><th>Due</th><th>Employee</th><th>Status</th><th>Actions</th>
+          <th>Job Number</th>
+          <th>Job Title</th>
+          <th>Department</th>
+          <th>Due Date</th>
+          <th>Employee</th>
+          <th>Status</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -53,6 +58,7 @@
 
   <template id="row-tpl">
     <tr>
+      <td class="job_number"></td>
       <td class="title"></td>
       <td class="department"></td>
       <td class="due"></td>

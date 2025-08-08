@@ -4,14 +4,13 @@ let ALL_JOBS = [];
 
 function fmtDate(d) {
   if (!d) return '';
-  // d might be "YYYY-MM-DD" or "YYYY-MM-DDTHH:mm:ssZ"
+  // Keep pure date; avoid timezone shift
   const s = String(d);
-  const only = s.includes('T') ? s.split('T')[0] : s; // keep pure date
+  const only = s.includes('T') ? s.split('T')[0] : s;
   const [y, m, day] = only.split('-');
-  if (y && m && day) return `${m}/${day}/${y}`; // M/D/YYYY
+  if (y && m && day) return `${m}/${day}/${y}`;
   return only;
 }
-
 
 async function fetchJSON(url, opts) {
   const res = await fetch(url, opts);
@@ -27,19 +26,20 @@ function applyFilterAndRender() {
 
   const filtered = ALL_JOBS.filter(j => {
     const matchesFilter = CURRENT_FILTER === 'all' ? true : (j.status === CURRENT_FILTER);
-    const s = `${j.title||''} ${j.department||''} ${j.employee||''}`.toLowerCase();
+    const s = `${j.job_number||''} ${j.title||''} ${j.department||''} ${j.employee||''}`.toLowerCase();
     const matchesSearch = !q || s.includes(q);
     return matchesFilter && matchesSearch;
   });
 
   if (!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="muted">No positions</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="muted">No positions</td></tr>';
     return;
   }
 
   for (const j of filtered) {
     const row = tpl.content.firstElementChild.cloneNode(true);
-    row.querySelector('.title').textContent = `${j.job_number ? j.job_number + ' – ' : ''}${j.title || ''}`;
+    row.querySelector('.job_number').textContent = j.job_number || '';
+    row.querySelector('.title').textContent = j.title || '';
     row.querySelector('.department').textContent = j.department || '';
     row.querySelector('.due').textContent = fmtDate(j.due_date);
     row.querySelector('.employee').textContent = j.employee || '';
@@ -50,6 +50,7 @@ function applyFilterAndRender() {
       : '<span class="badge badge-open">Open</span>';
 
     const actions = row.querySelector('.actions');
+
     if (status === 'Open') {
       const btnAssign = document.createElement('button');
       btnAssign.textContent = 'Assign';
