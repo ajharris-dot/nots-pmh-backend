@@ -1,5 +1,23 @@
-body { font-family: Arial, sans-serif; margin: 20px; background: #f7f7f7; }
-h1 { color: #333; }
-#job-form { margin-bottom: 20px; }
-#job-form input, #job-form select { margin: 5px; padding: 8px; }
-.job { background: #fff; padding: 10px; margin: 5px 0; border-radius: 5px; }
+:root { --bg:#0b1020; --card:#121a33; --text:#eaf0ff; --muted:#a9b3cf; --line:#2a355b; --ok:#1f6a36; --warn:#6f6a1f; --bad:#6a1f45; }
+*{ box-sizing: border-box; }
+body { margin: 24px; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, 'Noto Sans'; color: var(--text); background: radial-gradient(1200px 800px at 10% -20%, #1d2a60 0, transparent 60%), var(--bg); }
+.bar { display:flex; gap:12px; align-items:center; }
+h1 { margin:0 8px 0 0; }
+.card { background: var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin-top:18px; box-shadow: 0 10px 30px rgba(0,0,0,.2); }
+.row { display:flex; gap:12px; align-items:center; margin:8px 0; flex-wrap:wrap; }
+.row.between { justify-content: space-between; }
+label { font-size:14px; color:var(--muted); display:flex; gap:6px; align-items:center; }
+input { padding:8px; border-radius:10px; border:1px solid var(--line); background:#0e1630; color:var(--text); }
+input.wide { flex:1; min-width:320px; }
+button { background:#2f46a5; border:none; color:white; padding:8px 12px; border-radius:10px; cursor:pointer; }
+button:hover { opacity:.95; }
+.muted { color:var(--muted); font-size:12px; }
+.filters .tab { background:#18224b; border:1px solid var(--line); }
+.filters .tab.active { outline:2px solid #4258d6; }
+table { width:100%; border-collapse: collapse; margin-top:10px; }
+th, td { border-bottom:1px solid var(--line); padding:10px 8px; text-align:left; vertical-align: top; }
+.badge { padding:2px 8px; border-radius:12px; border:1px solid var(--line); font-size:12px; display:inline-block; }
+.badge-open { background:#143a20; border-color:#1f6a36; }
+.badge-filled { background:#2a1021; border-color:#6a1f45; }
+.actions button { margin-right:6px; }
+#search { min-width:240px; }

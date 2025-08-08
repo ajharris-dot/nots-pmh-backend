@@ -1,33 +1,130 @@
-const API = '/api/jobs';
+const API = ''; // same-origin
+let CURRENT_FILTER = 'all';
+let ALL_JOBS = [];
+
+function fmtDate(d) {
+  if (!d) return '';
+  const x = new Date(d);
+  return isNaN(x) ? '' : x.toLocaleDateString();
+}
+
+async function fetchJSON(url, opts) {
+  const res = await fetch(url, opts);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+function applyFilterAndRender() {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const tbody = document.querySelector('#jobs tbody');
+  const tpl = document.getElementById('row-tpl');
+  tbody.innerHTML = '';
+
+  const filtered = ALL_JOBS.filter(j => {
+    const matchesFilter = CURRENT_FILTER === 'all' ? true : (j.status === CURRENT_FILTER);
+    const s = `${j.title||''} ${j.client||''} ${j.assigned_to||''}`.toLowerCase();
+    const matchesSearch = !q || s.includes(q);
+    return matchesFilter && matchesSearch;
+  });
+
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="muted">No positions</td></tr>';
+    return;
+  }
+
+  for (const j of filtered) {
+    const row = tpl.content.firstElementChild.cloneNode(true);
+    row.querySelector('.title').textContent = j.title || '';
+    row.querySelector('.client').textContent = j.client || '';
+    row.querySelector('.due').textContent = fmtDate(j.due_date);
+    row.querySelector('.assigned').textContent = j.assigned_to || '';
+
+    const status = (j.status === 'Filled' || (j.assigned_to && j.status !== 'Open')) ? 'Filled' : 'Open';
+    row.querySelector('.status').innerHTML = status === 'Filled'
+      ? '<span class="badge badge-filled">Filled</span>'
+      : '<span class="badge badge-open">Open</span>';
+
+    const actions = row.querySelector('.actions');
+    if (status === 'Open') {
+      const btnAssign = document.createElement('button');
+      btnAssign.textContent = 'Assign';
+      btnAssign.onclick = async () => {
+        const name = prompt('Assign to (name):');
+        if (!name) return;
+        await fetchJSON(`${API}/api/jobs/${j.id}/assign`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assigned_to: name })
+        });
+        await loadJobs();
+      };
+      actions.appendChild(btnAssign);
+    } else {
+      const btnUnassign = document.createElement('button');
+      btnUnassign.textContent = 'Unassign';
+      btnUnassign.onclick = async () => {
+        if (!confirm('Remove current assignee?')) return;
+        await fetchJSON(`${API}/api/jobs/${j.id}/unassign`, { method: 'POST' });
+        await loadJobs();
+      };
+      actions.appendChild(btnUnassign);
+    }
+
+    const btnDelete = document.createElement('button');
+    btnDelete.textContent = 'Delete';
+    btnDelete.onclick = async () => {
+      if (!confirm('Delete this position?')) return;
+      await fetch(`${API}/api/jobs/${j.id}`, { method: 'DELETE' });
+      await loadJobs();
+    };
+    actions.appendChild(btnDelete);
+
+    tbody.appendChild(row);
+  }
+}
 
 async function loadJobs() {
-  const res = await fetch(API);
-  const jobs = await res.json();
-  const container = document.getElementById('jobs');
-  container.innerHTML = '';
-  jobs.forEach(job => {
-    const div = document.createElement('div');
-    div.className = 'job';
-    div.innerHTML = `<strong>${job.title}</strong> - ${job.status}<br>${job.description}<br>${job.client} | Due: ${new Date(job.due_date).toLocaleDateString()}<br>Assigned to: ${job.assigned_to}`;
-    container.appendChild(div);
-  });
+  const qs = CURRENT_FILTER === 'all' ? '' : `?status=${encodeURIComponent(CURRENT_FILTER)}`;
+  const jobs = await fetchJSON(`${API}/api/jobs${qs}`);
+  ALL_JOBS = jobs;
+  applyFilterAndRender();
 }
 
-async function createJob() {
-  const job = {
-    title: document.getElementById('title').value,
-    description: document.getElementById('description').value,
-    client: document.getElementById('client').value,
-    due_date: document.getElementById('due_date').value,
-    assigned_to: document.getElementById('assigned_to').value,
-    status: document.getElementById('status').value
-  };
-  await fetch(API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(job)
-  });
-  loadJobs();
-}
+document.getElementById('refresh').addEventListener('click', loadJobs);
+document.getElementById('search').addEventListener('input', applyFilterAndRender);
 
+document.querySelectorAll('.filters .tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filters .tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    CURRENT_FILTER = btn.dataset.filter;
+    loadJobs();
+  });
+});
+
+document.getElementById('createForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('createMsg');
+  msg.textContent = 'Saving...';
+  const fd = new FormData(e.target);
+  const body = Object.fromEntries(fd.entries());
+  if (!body.title) { msg.textContent = 'Title is required.'; return; }
+  if (!body.due_date) delete body.due_date;
+  if (!body.status) body.status = body.assigned_to ? 'Filled' : 'Open';
+  try {
+    await fetchJSON(`${API}/api/jobs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    e.target.reset();
+    msg.textContent = 'Added ✅';
+    await loadJobs();
+    setTimeout(()=> msg.textContent='', 1500);
+  } catch (e2) {
+    msg.textContent = 'Error: ' + e2.message;
+  }
+});
+
+// initial load
 loadJobs();

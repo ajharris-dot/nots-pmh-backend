@@ -1,27 +1,67 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>NOTS PMH Job Hub</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NOTS PMH – Positions</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <h1>NOTS PMH Job Hub</h1>
-  <div id="job-form">
-    <input id="title" placeholder="Title" />
-    <input id="description" placeholder="Description" />
-    <input id="client" placeholder="Client" />
-    <input id="due_date" type="date" />
-    <input id="assigned_to" placeholder="Assigned To" />
-    <select id="status">
-      <option value="Open">Open</option>
-      <option value="In Progress">In Progress</option>
-      <option value="Completed">Completed</option>
-    </select>
-    <button onclick="createJob()">Create Job</button>
-  </div>
-  <div id="jobs"></div>
+  <header class="bar">
+    <h1>Positions Hub</h1>
+    <nav class="filters">
+      <button data-filter="all" class="tab active">All</button>
+      <button data-filter="Open" class="tab">Open</button>
+      <button data-filter="Filled" class="tab">Filled</button>
+    </nav>
+    <button id="refresh">Refresh</button>
+  </header>
+
+  <section class="card">
+    <h2>Add Position</h2>
+    <form id="createForm">
+      <div class="row">
+        <label>Title <input name="title" required /></label>
+        <label>Client <input name="client" /></label>
+        <label>Due Date <input name="due_date" type="date" /></label>
+      </div>
+      <div class="row">
+        <label>Assign To (optional) <input name="assigned_to" /></label>
+        <label class="flex">Description <input name="description" class="wide" /></label>
+      </div>
+      <div class="row">
+        <button type="submit">Add Position</button>
+        <span id="createMsg" class="muted"></span>
+      </div>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="row between">
+      <h2>All Positions</h2>
+      <input id="search" placeholder="Search title/client/assignee" />
+    </div>
+    <table id="jobs">
+      <thead>
+        <tr>
+          <th>Title</th><th>Client</th><th>Due</th><th>Assigned</th><th>Status</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <template id="row-tpl">
+    <tr>
+      <td class="title"></td>
+      <td class="client"></td>
+      <td class="due"></td>
+      <td class="assigned"></td>
+      <td class="status"></td>
+      <td class="actions"></td>
+    </tr>
+  </template>
+
   <script src="app.js"></script>
 </body>
 </html>
