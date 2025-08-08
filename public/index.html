@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>NOTS PMH – Jobs</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; max-width: 1000px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    th, td { border: 1px solid #ddd; padding: 8px; }
+    th { background: #f4f4f4; text-align: left; }
+    form input, form select, form button { margin: 4px 8px 4px 0; padding: 6px; }
+    .row { margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <h1>NOTS PMH – Job Order Hub</h1>
+
+  <h3>Create Job</h3>
+  <form id="createForm">
+    <input name="title" placeholder="Title" required />
+    <input name="client" placeholder="Client" />
+    <input name="due_date" type="date" />
+    <input name="assigned_to" placeholder="Assigned To" />
+    <input name="description" placeholder="Description" size="40" />
+    <select name="status">
+      <option value="Open">Open</option>
+      <option value="In Progress">In Progress</option>
+      <option value="Closed">Closed</option>
+    </select>
+    <button type="submit">Add</button>
+  </form>
+
+  <div class="row">
+    <button id="refresh">Refresh</button>
+  </div>
+
+  <table id="jobs">
+    <thead>
+      <tr>
+        <th>Title</th><th>Client</th><th>Due</th><th>Assigned</th><th>Status</th><th>Actions</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script src="app.js"></script>
+</body>
+</html>
