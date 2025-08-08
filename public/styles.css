@@ -45,3 +45,22 @@ th, td { border-bottom:1px solid var(--line); padding:10px 8px; text-align:left;
 .badge { padding:2px 8px; border-radius:12px; border:1px solid var(--line); font-size:12px; display:inline-block; }
 .badge-open { background:#ecfdf5; border-color:#10b981; color:#065f46; }
 .badge-filled { background:#fef2f2; border-color:#ef4444; color:#7f1d1d; }
+
+/* Modal */
+.modal.hidden { display: none; }
+.modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+  display: flex; align-items: center; justify-content: center; z-index: 1000;
+}
+.modal-card {
+  width: min(900px, 95vw);
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+}
+button.secondary {
+  background: #fff; color: var(--text); border: 1px solid var(--line);
+}

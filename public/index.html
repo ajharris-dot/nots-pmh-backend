@@ -68,6 +68,35 @@
     </tr>
   </template>
 
+  <!-- Edit Modal -->
+  <div id="editModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="editTitle">
+    <div class="modal-card">
+      <h3 id="editTitle">Edit Position</h3>
+      <form id="editForm">
+        <input type="hidden" name="id" />
+        <div class="row">
+          <label>Job Title <input name="title" required /></label>
+          <label>Department <input name="department" /></label>
+          <label>Due Date <input name="due_date" type="date" /></label>
+        </div>
+        <div class="row">
+          <label class="flex">Job Number <input name="job_number" class="wide" /></label>
+        </div>
+        <div class="row">
+          <label>Employee
+            <input name="employee" readonly />
+          </label>
+          <span class="muted">Assigned employee cannot be edited here.</span>
+        </div>
+        <div class="row">
+          <button type="submit">Save Changes</button>
+          <button type="button" id="editCancel" class="secondary">Cancel</button>
+          <span id="editMsg" class="muted"></span>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>

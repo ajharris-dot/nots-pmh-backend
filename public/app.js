@@ -1,6 +1,7 @@
 const API = ''; // same-origin
 let CURRENT_FILTER = 'all';
 let ALL_JOBS = [];
+let CURRENT_EDIT = null; // the job being edited
 
 function fmtDate(d) {
   if (!d) return '';
@@ -10,6 +11,13 @@ function fmtDate(d) {
   const [y, m, day] = only.split('-');
   if (y && m && day) return `${m}/${day}/${y}`;
   return only;
+}
+
+// For setting <input type="date"> value as YYYY-MM-DD reliably
+function toISODate(d) {
+  if (!d) return '';
+  const s = String(d);
+  return s.includes('T') ? s.split('T')[0] : s;
 }
 
 async function fetchJSON(url, opts) {
@@ -51,6 +59,13 @@ function applyFilterAndRender() {
 
     const actions = row.querySelector('.actions');
 
+    // EDIT button
+    const btnEdit = document.createElement('button');
+    btnEdit.textContent = 'Edit';
+    btnEdit.onclick = () => openEdit(j);
+    actions.appendChild(btnEdit);
+
+    // ASSIGN / UNASSIGN
     if (status === 'Open') {
       const btnAssign = document.createElement('button');
       btnAssign.textContent = 'Assign';
@@ -60,7 +75,7 @@ function applyFilterAndRender() {
         await fetchJSON(`${API}/api/jobs/${j.id}/assign`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ employee: name })
+          body: JSON.stringify({ employee: name.trim() })
         });
         await loadJobs();
       };
@@ -76,6 +91,7 @@ function applyFilterAndRender() {
       actions.appendChild(btnUnassign);
     }
 
+    // DELETE
     const btnDelete = document.createElement('button');
     btnDelete.textContent = 'Delete';
     btnDelete.onclick = async () => {
@@ -96,6 +112,59 @@ async function loadJobs() {
   applyFilterAndRender();
 }
 
+/* ---------- Edit modal logic ---------- */
+function openEdit(j) {
+  CURRENT_EDIT = j;
+  const modal = document.getElementById('editModal');
+  const form = document.getElementById('editForm');
+  form.id.value = j.id;
+  form.title.value = j.title || '';
+  form.department.value = j.department || '';
+  form.due_date.value = toISODate(j.due_date) || '';
+  form.job_number.value = j.job_number || '';
+  form.employee.value = j.employee || '';
+  modal.classList.remove('hidden');
+}
+
+function closeEdit() {
+  CURRENT_EDIT = null;
+  document.getElementById('editModal').classList.add('hidden');
+  document.getElementById('editMsg').textContent = '';
+}
+
+document.getElementById('editCancel').addEventListener('click', closeEdit);
+
+document.getElementById('editForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('editMsg');
+  msg.textContent = 'Saving...';
+
+  const fd = new FormData(e.target);
+  const id = fd.get('id');
+
+  // Only send fields we allow to change
+  const body = {
+    title: fd.get('title') || null,
+    department: fd.get('department') || null,
+    due_date: fd.get('due_date') || null,
+    job_number: fd.get('job_number') || null
+  };
+
+  try {
+    await fetchJSON(`${API}/api/jobs/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    msg.textContent = 'Saved ✅';
+    await loadJobs();
+    setTimeout(() => closeEdit(), 250);
+  } catch (err) {
+    msg.textContent = 'Error: ' + err.message;
+  }
+});
+
+/* ---------- UI wiring ---------- */
 document.getElementById('refresh').addEventListener('click', loadJobs);
 document.getElementById('search').addEventListener('input', applyFilterAndRender);
 
@@ -114,7 +183,6 @@ document.getElementById('createForm').addEventListener('submit', async (e) => {
   msg.textContent = 'Saving...';
   const fd = new FormData(e.target);
   const body = Object.fromEntries(fd.entries());
-  // body has: title, department, due_date, job_number
   try {
     await fetchJSON(`${API}/api/jobs`, {
       method: 'POST',
@@ -132,3 +200,11 @@ document.getElementById('createForm').addEventListener('submit', async (e) => {
 
 // initial load
 loadJobs();
+
+// close modal on backdrop click or Esc
+document.getElementById('editModal').addEventListener('click', (e) => {
+  if (e.target.id === 'editModal') closeEdit();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeEdit();
+});
