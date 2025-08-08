@@ -22,7 +22,7 @@ function applyFilterAndRender() {
 
   const filtered = ALL_JOBS.filter(j => {
     const matchesFilter = CURRENT_FILTER === 'all' ? true : (j.status === CURRENT_FILTER);
-    const s = `${j.title||''} ${j.client||''} ${j.assigned_to||''}`.toLowerCase();
+    const s = `${j.title||''} ${j.department||''} ${j.employee||''}`.toLowerCase();
     const matchesSearch = !q || s.includes(q);
     return matchesFilter && matchesSearch;
   });
@@ -34,12 +34,12 @@ function applyFilterAndRender() {
 
   for (const j of filtered) {
     const row = tpl.content.firstElementChild.cloneNode(true);
-    row.querySelector('.title').textContent = j.title || '';
-    row.querySelector('.client').textContent = j.client || '';
+    row.querySelector('.title').textContent = `${j.job_number ? j.job_number + ' – ' : ''}${j.title || ''}`;
+    row.querySelector('.department').textContent = j.department || '';
     row.querySelector('.due').textContent = fmtDate(j.due_date);
-    row.querySelector('.assigned').textContent = j.assigned_to || '';
+    row.querySelector('.employee').textContent = j.employee || '';
 
-    const status = (j.status === 'Filled' || (j.assigned_to && j.status !== 'Open')) ? 'Filled' : 'Open';
+    const status = (j.status === 'Filled' || (j.employee && j.status !== 'Open')) ? 'Filled' : 'Open';
     row.querySelector('.status').innerHTML = status === 'Filled'
       ? '<span class="badge badge-filled">Filled</span>'
       : '<span class="badge badge-open">Open</span>';
@@ -49,12 +49,12 @@ function applyFilterAndRender() {
       const btnAssign = document.createElement('button');
       btnAssign.textContent = 'Assign';
       btnAssign.onclick = async () => {
-        const name = prompt('Assign to (name):');
+        const name = prompt('Assign to (employee name):');
         if (!name) return;
         await fetchJSON(`${API}/api/jobs/${j.id}/assign`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ assigned_to: name })
+          body: JSON.stringify({ employee: name })
         });
         await loadJobs();
       };
@@ -63,7 +63,7 @@ function applyFilterAndRender() {
       const btnUnassign = document.createElement('button');
       btnUnassign.textContent = 'Unassign';
       btnUnassign.onclick = async () => {
-        if (!confirm('Remove current assignee?')) return;
+        if (!confirm('Remove current employee?')) return;
         await fetchJSON(`${API}/api/jobs/${j.id}/unassign`, { method: 'POST' });
         await loadJobs();
       };
@@ -108,9 +108,7 @@ document.getElementById('createForm').addEventListener('submit', async (e) => {
   msg.textContent = 'Saving...';
   const fd = new FormData(e.target);
   const body = Object.fromEntries(fd.entries());
-  if (!body.title) { msg.textContent = 'Title is required.'; return; }
-  if (!body.due_date) delete body.due_date;
-  if (!body.status) body.status = body.assigned_to ? 'Filled' : 'Open';
+  // body has: title, department, due_date, job_number
   try {
     await fetchJSON(`${API}/api/jobs`, {
       method: 'POST',
