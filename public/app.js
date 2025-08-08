@@ -1,64 +1,33 @@
-const API = ''; // same origin (served by Express)
+const API = '/api/jobs';
 
-async function fetchJobs() {
-  const res = await fetch(`${API}/api/jobs`);
+async function loadJobs() {
+  const res = await fetch(API);
   const jobs = await res.json();
-  const tbody = document.querySelector('#jobs tbody');
-  tbody.innerHTML = '';
-  jobs.forEach(j => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${j.title ?? ''}</td>
-      <td>${j.client ?? ''}</td>
-      <td>${j.due_date ? new Date(j.due_date).toLocaleDateString() : ''}</td>
-      <td>${j.assigned_to ?? ''}</td>
-      <td>${j.status ?? ''}</td>
-      <td>
-        <button data-id="${j.id}" class="mark-progress">In Progress</button>
-        <button data-id="${j.id}" class="mark-closed">Close</button>
-        <button data-id="${j.id}" class="delete">Delete</button>
-      </td>
-    `;
-    tbody.appendChild(tr);
+  const container = document.getElementById('jobs');
+  container.innerHTML = '';
+  jobs.forEach(job => {
+    const div = document.createElement('div');
+    div.className = 'job';
+    div.innerHTML = `<strong>${job.title}</strong> - ${job.status}<br>${job.description}<br>${job.client} | Due: ${new Date(job.due_date).toLocaleDateString()}<br>Assigned to: ${job.assigned_to}`;
+    container.appendChild(div);
   });
 }
 
-document.getElementById('refresh').addEventListener('click', fetchJobs);
-
-document.getElementById('createForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const fd = new FormData(e.target);
-  const body = Object.fromEntries(fd.entries());
-  if (body.due_date === '') delete body.due_date;
-  const res = await fetch(`${API}/api/jobs`, {
+async function createJob() {
+  const job = {
+    title: document.getElementById('title').value,
+    description: document.getElementById('description').value,
+    client: document.getElementById('client').value,
+    due_date: document.getElementById('due_date').value,
+    assigned_to: document.getElementById('assigned_to').value,
+    status: document.getElementById('status').value
+  };
+  await fetch(API, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
+    body: JSON.stringify(job)
   });
-  if (!res.ok) alert('Create failed');
-  e.target.reset();
-  fetchJobs();
-});
+  loadJobs();
+}
 
-document.addEventListener('click', async (e) => {
-  if (e.target.matches('.mark-progress')) {
-    await fetch(`${API}/api/jobs/${e.target.dataset.id}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'In Progress' })
-    });
-    fetchJobs();
-  }
-  if (e.target.matches('.mark-closed')) {
-    await fetch(`${API}/api/jobs/${e.target.dataset.id}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'Closed' })
-    });
-    fetchJobs();
-  }
-  if (e.target.matches('.delete')) {
-    if (!confirm('Delete this job?')) return;
-    await fetch(`${API}/api/jobs/${e.target.dataset.id}`, { method: 'DELETE' });
-    fetchJobs();
-  }
-});
-fetchJobs();
+loadJobs();
