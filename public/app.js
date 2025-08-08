@@ -4,9 +4,14 @@ let ALL_JOBS = [];
 
 function fmtDate(d) {
   if (!d) return '';
-  const x = new Date(d);
-  return isNaN(x) ? '' : x.toLocaleDateString();
+  // d might be "YYYY-MM-DD" or "YYYY-MM-DDTHH:mm:ssZ"
+  const s = String(d);
+  const only = s.includes('T') ? s.split('T')[0] : s; // keep pure date
+  const [y, m, day] = only.split('-');
+  if (y && m && day) return `${m}/${day}/${y}`; // M/D/YYYY
+  return only;
 }
+
 
 async function fetchJSON(url, opts) {
   const res = await fetch(url, opts);
