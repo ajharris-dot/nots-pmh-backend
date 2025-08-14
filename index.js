@@ -2,21 +2,35 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 
 const app = express();
 
+/* ---------- Uploads setup (kept local for now) ---------- */
+const UPLOAD_DIR = path.join(__dirname, 'public', 'uploads');
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+  filename: (_req, file, cb) => {
+    const safe = file.originalname.replace(/[^a-z0-9.\-_]+/gi, '_');
+    cb(null, `${Date.now()}_${safe}`);
+  }
+});
+const upload = multer({ storage });
+
+/* ---------- App middleware ---------- */
 app.set('trust proxy', 1);
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
-
-// serve static frontend
 app.use(express.static(path.join(__dirname, 'public')));
 
-// health + root
+/* ---------- Health + root ---------- */
 app.get('/healthz', (_req, res) => res.status(200).json({ ok: true }));
 app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-// debug
+/* ---------- Debug ---------- */
 app.get('/debug/env', (_req, res) => {
   res.json({
     DB_USER: !!process.env.DB_USER,
@@ -38,12 +52,20 @@ app.get('/debug/db', async (_req, res) => {
   }
 });
 
+/* ---------- Upload endpoint (returns { url }) ---------- */
+// multipart/form-data; field name: "photo"
+app.post('/api/upload', upload.single('photo'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const url = `/uploads/${req.file.filename}`;
+  res.json({ url });
+});
+
 /* =========================
    Jobs API (new terminology)
    ========================= */
 
 // GET /api/jobs?status=Open|Filled|...&limit=100&offset=0
-// Returns aliased fields: department, employee, job_number
+// Returns aliased fields: department, employee, job_number, employee_photo_url
 app.get('/api/jobs', async (req, res) => {
   try {
     const db = require('./models/db');
@@ -59,13 +81,14 @@ app.get('/api/jobs', async (req, res) => {
         description AS job_number,
         client AS department,
         assigned_to AS employee,
+        employee_photo_url,
         due_date,
         status,
         created_at
       FROM jobs
     `;
     if (status && status !== 'all') {
-      q += ` WHERE status = $1`;
+      q += ` WHERE LOWER(status) = LOWER($1)`;
       params.push(status);
     }
     q += ` ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
@@ -90,6 +113,7 @@ app.get('/api/jobs/:id', async (req, res) => {
         description AS job_number,
         client AS department,
         assigned_to AS employee,
+        employee_photo_url,
         due_date,
         status,
         created_at
@@ -115,7 +139,7 @@ app.post('/api/jobs', async (req, res) => {
        VALUES ($1, $2, $3, $4, NULL, $5)
        RETURNING
          id, title, description AS job_number, client AS department,
-         assigned_to AS employee, due_date, status, created_at`,
+         assigned_to AS employee, employee_photo_url, due_date, status, created_at`,
       [title, job_number || null, department || null, due_date || null, effectiveStatus]
     );
     res.status(201).json(rows[0]);
@@ -129,14 +153,24 @@ app.post('/api/jobs', async (req, res) => {
 app.patch('/api/jobs/:id', async (req, res) => {
   try {
     const db = require('./models/db');
-    const { title, job_number, department, due_date, employee, status } = req.body || {};
+    const {
+      title,
+      job_number,
+      department,
+      due_date,
+      employee,
+      status,
+      employee_photo_url
+    } = req.body || {};
+
     const fields = {
       title,
-      description: job_number,   // job_number -> description
-      client: department,        // department -> client
+      description: job_number,       // job_number -> description
+      client: department,            // department -> client
       due_date,
-      assigned_to: employee,     // employee -> assigned_to
-      status
+      assigned_to: employee,         // employee -> assigned_to
+      status,
+      employee_photo_url             // allow updating photo URL
     };
 
     const set = [], vals = [];
@@ -151,7 +185,7 @@ app.patch('/api/jobs/:id', async (req, res) => {
       `UPDATE jobs SET ${set.join(', ')} WHERE id = $${i}
        RETURNING
          id, title, description AS job_number, client AS department,
-         assigned_to AS employee, due_date, status, created_at`,
+         assigned_to AS employee, employee_photo_url, due_date, status, created_at`,
       vals
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
@@ -181,13 +215,14 @@ app.post('/api/jobs/:id/assign', async (req, res) => {
     const db = require('./models/db');
     const { employee } = req.body || {};
     if (!employee) return res.status(400).json({ error: 'employee required' });
+
     const { rows } = await db.query(
       `UPDATE jobs
        SET assigned_to = $1, status = 'Filled'
        WHERE id = $2
        RETURNING
          id, title, description AS job_number, client AS department,
-         assigned_to AS employee, due_date, status, created_at`,
+         assigned_to AS employee, employee_photo_url, due_date, status, created_at`,
       [employee, req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
@@ -208,7 +243,7 @@ app.post('/api/jobs/:id/unassign', async (req, res) => {
        WHERE id = $1
        RETURNING
          id, title, description AS job_number, client AS department,
-         assigned_to AS employee, due_date, status, created_at`,
+         assigned_to AS employee, employee_photo_url, due_date, status, created_at`,
       [req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
@@ -219,8 +254,9 @@ app.post('/api/jobs/:id/unassign', async (req, res) => {
   }
 });
 
-// 404
+/* ---------- 404 fallback ---------- */
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 
+/* ---------- Start server ---------- */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
