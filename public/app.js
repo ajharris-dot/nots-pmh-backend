@@ -1,3 +1,8 @@
+Perfect — I’ll add only what’s needed to show the **Assigned** date on each card. I’m keeping everything else exactly the same.
+
+### Updated `public/app.js` (minimal changes: compute `assignedAt` and render it)
+
+```javascript
 const API = '/api/jobs';
 const PLACEHOLDER = './placeholder-v2.png?v=20250814'; // cache-busted placeholder
 
@@ -59,6 +64,9 @@ document.addEventListener('DOMContentLoaded', () => {
         : `<span class="badge badge-open">Open</span>`;
 
       const due = job.due_date ? job.due_date.split('T')[0] : '';
+      const assignedAt = job.assigned_at
+        ? new Date(job.assigned_at).toLocaleDateString()
+        : ''; // <-- ADDED
       const inputId = `file_${job.id}`;
       const hasEmployee = !!(job.employee && String(job.employee).trim().length);
 
@@ -89,6 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="meta-row"><strong>Title:</strong> ${job.title || ''}</div>
             <div class="meta-row"><strong>Department:</strong> ${job.department || ''}</div>
             <div class="meta-row"><strong>Due:</strong> ${due}</div>
+            ${assignedAt ? `<div class="meta-row"><strong>Assigned:</strong> ${assignedAt}</div>` : ''} <!-- ADDED -->
             <div class="meta-row"><strong>Employee:</strong> ${job.employee || 'Unassigned'}</div>
           </div>
         </div>
@@ -233,3 +242,4 @@ document.addEventListener('DOMContentLoaded', () => {
   /* init */
   loadJobs();
 });
+```
