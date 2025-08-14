@@ -1,216 +1,178 @@
-const API = '/api/jobs';
+/* Minimal frontend to render cards with a FIT photo area (no cropping). */
 
-let ALL_JOBS = [];
-let CURRENT_FILTER = 'all';
-
-document.addEventListener('DOMContentLoaded', () => {
-  const jobGrid = document.getElementById('jobGrid');
-  const addJobBtn = document.getElementById('addJobBtn');
-  const refreshBtn = document.getElementById('refresh');
-  const search = document.getElementById('search');
-
-  const jobModal = document.getElementById('jobModal');
-  const modalTitle = document.getElementById('modalTitle');
-  const jobForm = document.getElementById('jobForm');
-  const cancelModal = document.getElementById('cancelModal');
-
-  /* ------------ helpers ------------ */
-  const fmtDate = (d) => {
-    if (!d) return '';
-    const s = String(d);
-    const only = s.includes('T') ? s.split('T')[0] : s;
-    const [y,m,day] = only.split('-');
-    return (y && m && day) ? `${y}-${m}-${day}` : only;
-  };
-
-  const isFilled = (j) => !!j.employee || (j.status && j.status.toLowerCase() === 'filled');
-
-  /* ------------ data ------------ */
-  async function loadJobs(){
-    const qs = CURRENT_FILTER === 'all' ? '' : `?status=${encodeURIComponent(CURRENT_FILTER)}`;
-    const res = await fetch(`${API}${qs}`);
-    if (!res.ok){ console.error('Failed to fetch jobs'); return; }
-    ALL_JOBS = await res.json();
-    render();
-  }
-
-  /* ------------ UI render ------------ */
-  function render(){
-    const q = search.value.trim().toLowerCase();
-    jobGrid.innerHTML = '';
-
-    const filtered = ALL_JOBS.filter(j => {
-      const text = `${j.job_number||''} ${j.title||''} ${j.department||''}`.toLowerCase();
-      return (CURRENT_FILTER==='all' || j.status===CURRENT_FILTER) && (!q || text.includes(q));
-    });
-
-    if (!filtered.length){
-      jobGrid.innerHTML = `<div style="color:#6b7280">No positions</div>`;
-      return;
-    }
-
-    filtered.forEach(job => {
-      const card = document.createElement('div');
-      card.className = 'job-card';
-
-      const statusBadge = isFilled(job)
-        ? `<span class="badge badge-filled">Filled</span>`
-        : `<span class="badge badge-open">Open</span>`;
-
-      const due = job.due_date ? job.due_date.split('T')[0] : '';
-      const inputId = `file_${job.id}`;
-
-      card.innerHTML = `
-        <div class="photo-container">
-          <img src="${job.employee_photo_url || '/placeholder.png'}" alt="Employee Photo"/>
-          <input type="file" id="${inputId}" class="photo-input" data-id="${job.id}" accept="image/*" style="display:none" />
-        </div>
-
-        <div class="card-body">
-          <div class="card-title">
-            <h3>${job.job_number || 'No Number'}</h3>
-            ${statusBadge}
-          </div>
-
-          <div class="card-meta">
-            <div class="meta-row"><strong>Title:</strong> ${job.title || ''}</div>
-            <div class="meta-row"><strong>Department:</strong> ${job.department || ''}</div>
-            <div class="meta-row"><strong>Due:</strong> ${due}</div>
-            <div class="meta-row"><strong>Employee:</strong> ${job.employee || 'Unassigned'}</div>
-          </div>
-        </div>
-
-        <div class="card-actions">
-          ${isFilled(job)
-            ? `<button class="upload-btn" data-action="trigger-upload" data-input="${inputId}">Upload Photo</button>
-               <button class="secondary" data-action="unassign" data-id="${job.id}">Unassign</button>`
-            : `<button class="secondary" data-action="assign" data-id="${job.id}">Assign</button>`
-          }
-          <button class="secondary" data-action="edit" data-id="${job.id}">Edit</button>
-          <button class="danger" data-action="delete" data-id="${job.id}">Delete</button>
-        </div>
-      `;
-
-      jobGrid.appendChild(card);
-    });
-  }
-
-  /* ------------ modal helpers ------------ */
-  function openModal(job=null){
-    jobModal.classList.remove('hidden');
-    if (job){
-      modalTitle.textContent = 'Edit Position';
-      document.getElementById('jobId').value = job.id;
-      document.getElementById('jobNumber').value = job.job_number || '';
-      document.getElementById('jobTitle').value = job.title || '';
-      document.getElementById('department').value = job.department || '';
-      document.getElementById('dueDate').value = fmtDate(job.due_date);
-      document.getElementById('employee').value = job.employee || '';
-    }else{
-      modalTitle.textContent = 'Add Position';
-      jobForm.reset();
-      document.getElementById('jobId').value = '';
-    }
-  }
-  function closeModal(){ jobModal.classList.add('hidden'); }
-
-  /* ------------ events ------------ */
-  document.querySelectorAll('.filters .tab').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      document.querySelectorAll('.filters .tab').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      CURRENT_FILTER = btn.dataset.filter;
-      loadJobs();
-    });
-  });
-
-  addJobBtn.addEventListener('click', ()=> openModal());
-  cancelModal.addEventListener('click', closeModal);
-  refreshBtn.addEventListener('click', loadJobs);
-  search.addEventListener('input', render);
-
-  jobForm.addEventListener('submit', async (e)=>{
-    e.preventDefault();
-    const id = document.getElementById('jobId').value;
-    const payload = {
-      job_number : document.getElementById('jobNumber').value,
-      title      : document.getElementById('jobTitle').value,
-      department : document.getElementById('department').value,
-      due_date   : document.getElementById('dueDate').value
-    };
-    if (id){
-      await fetch(`${API}/${id}`, {
-        method:'PATCH', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify(payload)
-      });
-    }else{
-      await fetch(`${API}`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify(payload)
-      });
-    }
-    closeModal();
-    loadJobs();
-  });
-
-  // Card button clicks
-  jobGrid.addEventListener('click', async (e)=>{
-    const action = e.target.dataset.action;
-    if (!action) return;
-
-    if (action === 'trigger-upload'){
-      const input = document.getElementById(e.target.dataset.input);
-      if (input) input.click();
-      return;
-    }
-
-    const id = e.target.dataset.id;
-    if (!id) return;
-
-    if (action === 'edit'){
-      const job = ALL_JOBS.find(j => j.id == id);
-      openModal(job);
-
-    }else if (action === 'delete'){
-      await fetch(`${API}/${id}`, { method:'DELETE' });
-      loadJobs();
-
-    }else if (action === 'assign'){
-      const name = prompt('Enter employee name:');
-      if (!name) return;
-      await fetch(`${API}/${id}/assign`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({ employee:name })
-      });
-      loadJobs();
-
-    }else if (action === 'unassign'){
-      await fetch(`${API}/${id}/unassign`, { method:'POST' });
-      loadJobs();
-    }
-  });
-
-  // File input change → upload → patch job
-  jobGrid.addEventListener('change', async (e)=>{
-    if (!e.target.classList.contains('photo-input')) return;
-    const id = e.target.dataset.id;
-    const file = e.target.files[0];
-    if (!file) return;
-
+const API = {
+  list: () => fetch('/api/jobs').then(r => r.json()),
+  patch: (id, data) =>
+    fetch(`/api/jobs/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then(r => {
+      if (!r.ok) throw new Error('Failed to update job');
+      return r.json();
+    }),
+  upload: (file) => {
     const fd = new FormData();
-    fd.append('photo', file);
-    const up = await fetch('/api/upload', { method:'POST', body:fd });
-    if (!up.ok){ alert('Upload failed'); return; }
-    const { url } = await up.json();
+    fd.append('file', file);
+    return fetch('/api/upload', { method: 'POST', body: fd })
+      .then(r => {
+        if (!r.ok) throw new Error('Upload failed');
+        return r.json();
+      });
+  },
+};
 
-    await fetch(`${API}/${id}`, {
-      method:'PATCH',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ employee_photo_url:url })
-    });
-    loadJobs();
+const state = {
+  jobs: [],
+  status: 'all',
+  query: '',
+};
+
+const el = {
+  grid: document.getElementById('grid'),
+  empty: document.getElementById('empty'),
+  tabs: document.getElementById('tabs'),
+  search: document.getElementById('search'),
+  btnRefresh: document.getElementById('btnRefresh'),
+  btnAdd: document.getElementById('btnAdd'),
+};
+
+function statusClass(s) {
+  const v = String(s || '').toLowerCase();
+  if (v === 'filled') return 'filled';
+  if (v === 'assigned') return 'assigned';
+  return 'open';
+}
+
+function formatDate(d) {
+  if (!d) return '';
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return '';
+  return dt.toLocaleDateString();
+}
+
+function filterJobs() {
+  const q = state.query.trim().toLowerCase();
+  return state.jobs.filter(j => {
+    const statusOk = state.status === 'all' || String(j.status || 'open').toLowerCase() === state.status;
+    if (!statusOk) return false;
+    if (!q) return true;
+    const hay = [
+      j.title, j.job_title, j.jobnumber, j.job_number, j.number,
+      j.client, j.department, j.employee, j.assigned_to
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return hay.includes(q);
   });
+}
 
-  /* init */
-  loadJobs();
+function render() {
+  const list = filterJobs();
+  el.grid.innerHTML = '';
+  el.empty.style.display = list.length ? 'none' : 'block';
+
+  list.forEach(j => {
+    const id = j.id;
+    const title = j.title || j.job_title || '(Untitled)';
+    const jobNo = j.job_number || j.jobnumber || j.number || '';
+    const dept = j.department || '';
+    const client = j.client || '';
+    const due = formatDate(j.due_date);
+    const employee = j.employee || j.assigned_to || '';
+    const status = (j.status || (employee ? 'filled' : 'open')).toLowerCase();
+    const photoUrl = j.employee_photo_url || '';
+
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="row" style="justify-content: space-between;">
+        <span class="chip ${statusClass(status)}">${status.replace(/^\w/, c => c.toUpperCase())}</span>
+        <small class="help">${jobNo ? `#${jobNo}` : ''}</small>
+      </div>
+
+      <div class="card-photo ${photoUrl ? '' : 'card-photo--empty'}">
+        ${photoUrl ? `<img src="${photoUrl}" alt="Employee photo" loading="lazy">` : ''}
+      </div>
+
+      <h3>${title}</h3>
+
+      <div class="meta">
+        <div title="${client}">Client: ${client || '—'}</div>
+        <div title="${dept}">Dept: ${dept || '—'}</div>
+        <div>Due: ${due || '—'}</div>
+        <div title="${employee}">Employee: ${employee || '—'}</div>
+      </div>
+
+      <div class="actions">
+        <small class="help">Add/replace photo</small>
+        <div class="photo-controls">
+          <label class="file">
+            <input type="file" accept="image/*" data-id="${id}">
+            Upload
+          </label>
+        </div>
+      </div>
+    `;
+
+    // hook up upload
+    const input = card.querySelector('input[type="file"]');
+    input?.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        input.disabled = true;
+        input.parentElement.style.opacity = 0.6;
+
+        const { url } = await API.upload(file);               // { url: "/uploads/xxx.jpg" }
+        await API.patch(id, { employee_photo_url: url });     // persist on the job
+        await load();                                         // refresh list
+      } catch (err) {
+        alert(err.message || 'Upload failed');
+      } finally {
+        input.disabled = false;
+        input.parentElement.style.opacity = 1;
+        e.target.value = '';
+      }
+    });
+
+    el.grid.appendChild(card);
+  });
+}
+
+async function load() {
+  const data = await API.list();
+  // Accept either {jobs:[...]} or raw array
+  state.jobs = Array.isArray(data) ? data : (data.jobs || []);
+  render();
+}
+
+/* Events */
+el.tabs.addEventListener('click', (e) => {
+  const t = e.target.closest('.tab');
+  if (!t) return;
+  [...el.tabs.children].forEach(c => c.classList.remove('active'));
+  t.classList.add('active');
+  state.status = t.dataset.status;
+  render();
+});
+
+el.search.addEventListener('input', (e) => {
+  state.query = e.target.value;
+  render();
+});
+
+el.btnRefresh.addEventListener('click', load);
+
+// (Optional) add handler for "New Job" if desired
+el.btnAdd.addEventListener('click', () => {
+  alert('Hook up your "New Job" modal/form here.');
+});
+
+/* Init */
+load().catch(err => {
+  console.error(err);
+  el.empty.style.display = 'block';
+  el.empty.textContent = 'Failed to load jobs.';
 });

@@ -1,73 +1,37 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Positions Hub</title>
-  <link rel="stylesheet" href="styles.css"/>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NOTS PMH – Job Order Hub</title>
+  <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <header class="topbar">
-    <h1>Positions Hub</h1>
-
-    <div class="topbar-actions">
-      <div class="filters">
-        <button class="tab active" data-filter="all">All</button>
-        <button class="tab" data-filter="Open">Open</button>
-        <button class="tab" data-filter="Filled">Filled</button>
+  <div class="container">
+    <div class="header">
+      <div class="title">NOTS PMH — Job Order Hub</div>
+      <div class="actions">
+        <button id="btnAdd">New Job</button>
+        <button class="secondary" id="btnRefresh" title="Reload list">Refresh</button>
       </div>
-      <button id="refresh" class="secondary">Refresh</button>
-      <button id="addJobBtn" class="primary">+ Add Position</button>
     </div>
-  </header>
 
-  <main class="content">
-    <!-- Search -->
     <div class="toolbar">
-      <input id="search" placeholder="Search job # / title / department" />
+      <div class="tabs" id="tabs">
+        <div class="tab active" data-status="all">All</div>
+        <div class="tab" data-status="open">Open</div>
+        <div class="tab" data-status="assigned">Assigned</div>
+        <div class="tab" data-status="filled">Filled</div>
+      </div>
+      <div class="search">
+        <input id="search" type="search" placeholder="Search jobs… (title, number, client, employee)" />
+      </div>
     </div>
 
-    <!-- Cards -->
-    <div id="jobGrid" class="card-grid"></div>
-  </main>
-
-  <!-- Add/Edit Modal -->
-  <div id="jobModal" class="modal hidden">
-    <div class="modal-card">
-      <h2 id="modalTitle">Add Position</h2>
-      <form id="jobForm">
-        <input type="hidden" id="jobId"/>
-
-        <label>Job Number
-          <input type="text" id="jobNumber" required />
-        </label>
-
-        <label>Job Title
-          <input type="text" id="jobTitle" required />
-        </label>
-
-        <label>Department
-          <input type="text" id="department" required />
-        </label>
-
-        <label>Due Date
-          <input type="date" id="dueDate" required />
-        </label>
-
-        <label>Employee (view only)
-          <input type="text" id="employee" disabled/>
-        </label>
-
-        <div class="modal-actions">
-          <button type="submit" class="primary">Save</button>
-          <button type="button" id="cancelModal" class="secondary">Cancel</button>
-        </div>
-      </form>
-    </div>
+    <div id="grid" class="grid"></div>
+    <div id="empty" class="empty" style="display:none;">No jobs match your filters.</div>
   </div>
 
-  <!-- Optional placeholder image used when no photo -->
-  <!-- Put a real file named placeholder.png inside /public -->
-  <script src="app.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
