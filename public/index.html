@@ -1,102 +1,73 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NOTS PMH – Positions Hub</title>
-  <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Positions Hub</title>
+  <link rel="stylesheet" href="styles.css"/>
 </head>
 <body>
-  <header class="bar">
+  <header class="topbar">
     <h1>Positions Hub</h1>
-    <nav class="filters">
-      <button data-filter="all" class="tab active">All</button>
-      <button data-filter="Open" class="tab">Open</button>
-      <button data-filter="Filled" class="tab">Filled</button>
-    </nav>
-    <button id="refresh">Refresh</button>
+
+    <div class="topbar-actions">
+      <div class="filters">
+        <button class="tab active" data-filter="all">All</button>
+        <button class="tab" data-filter="Open">Open</button>
+        <button class="tab" data-filter="Filled">Filled</button>
+      </div>
+      <button id="refresh" class="secondary">Refresh</button>
+      <button id="addJobBtn" class="primary">+ Add Position</button>
+    </div>
   </header>
 
-  <section class="card">
-    <h2>Add Position</h2>
-    <form id="createForm">
-      <div class="row">
-        <label>Job Title <input name="title" required /></label>
-        <label>Department <input name="department" /></label>
-        <label>Due Date <input name="due_date" type="date" /></label>
-      </div>
-      <div class="row">
-        <label class="flex">Job Number <input name="job_number" class="wide" /></label>
-      </div>
-      <div class="row">
-        <button type="submit">Add Position</button>
-        <span id="createMsg" class="muted"></span>
-      </div>
-    </form>
-  </section>
-
-  <section class="card">
-    <div class="row between">
-      <h2>All Positions</h2>
-      <input id="search" placeholder="Search job # / title / department / employee" />
+  <main class="content">
+    <!-- Search -->
+    <div class="toolbar">
+      <input id="search" placeholder="Search job # / title / department" />
     </div>
-    <table id="jobs">
-      <thead>
-        <tr>
-          <th>Job Number</th>
-          <th>Job Title</th>
-          <th>Department</th>
-          <th>Due Date</th>
-          <th>Employee</th>
-          <th>Status</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </section>
 
-  <template id="row-tpl">
-    <tr>
-      <td class="job_number"></td>
-      <td class="title"></td>
-      <td class="department"></td>
-      <td class="due"></td>
-      <td class="employee"></td>
-      <td class="status"></td>
-      <td class="actions"></td>
-    </tr>
-  </template>
+    <!-- Cards -->
+    <div id="jobGrid" class="card-grid"></div>
+  </main>
 
-  <!-- Edit Modal -->
-  <div id="editModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="editTitle">
+  <!-- Add/Edit Modal -->
+  <div id="jobModal" class="modal hidden">
     <div class="modal-card">
-      <h3 id="editTitle">Edit Position</h3>
-      <form id="editForm">
-        <input type="hidden" name="id" />
-        <div class="row">
-          <label>Job Title <input name="title" required /></label>
-          <label>Department <input name="department" /></label>
-          <label>Due Date <input name="due_date" type="date" /></label>
-        </div>
-        <div class="row">
-          <label class="flex">Job Number <input name="job_number" class="wide" /></label>
-        </div>
-        <div class="row">
-          <label>Employee
-            <input name="employee" readonly />
-          </label>
-          <span class="muted">Assigned employee cannot be edited here.</span>
-        </div>
-        <div class="row">
-          <button type="submit">Save Changes</button>
-          <button type="button" id="editCancel" class="secondary">Cancel</button>
-          <span id="editMsg" class="muted"></span>
+      <h2 id="modalTitle">Add Position</h2>
+      <form id="jobForm">
+        <input type="hidden" id="jobId"/>
+
+        <label>Job Number
+          <input type="text" id="jobNumber" required />
+        </label>
+
+        <label>Job Title
+          <input type="text" id="jobTitle" required />
+        </label>
+
+        <label>Department
+          <input type="text" id="department" required />
+        </label>
+
+        <label>Due Date
+          <input type="date" id="dueDate" required />
+        </label>
+
+        <label>Employee (view only)
+          <input type="text" id="employee" disabled/>
+        </label>
+
+        <div class="modal-actions">
+          <button type="submit" class="primary">Save</button>
+          <button type="button" id="cancelModal" class="secondary">Cancel</button>
         </div>
       </form>
     </div>
   </div>
 
+  <!-- Optional placeholder image used when no photo -->
+  <!-- Put a real file named placeholder.png inside /public -->
   <script src="app.js"></script>
 </body>
 </html>
