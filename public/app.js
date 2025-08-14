@@ -1,4 +1,6 @@
 const API = '/api/jobs';
+const PLACEHOLDER = '/placeholder-v2.png?v=20250814'; // bump version if you change the file again
+
 
 let ALL_JOBS = [];
 let CURRENT_FILTER = 'all';
@@ -63,7 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
       card.innerHTML = `
         <div class="photo-container">
           <img 
-          src="${job.employee ? (job.employee_photo_url || '/placeholder.png') : '/placeholder.png'}" 
+          src="${job.employee ? (job.employee_photo_url || '/placeholder-v2.png') : '/placeholder-v2.png'}" 
           alt="Employee Photo"
          />
          <input 
