@@ -2,11 +2,11 @@ const express = require('express');
 const router = express.Router();
 const db = require('../models/db');
 
-// GET all jobs (optional ?status=Open/Assigned/Filled)
+// GET all jobs (supports optional ?status= filter)
 router.get('/', async (req, res) => {
   try {
-    const status = req.query.status;
-    if (status && String(status).trim().length) {
+    const status = req.query.status && String(req.query.status).trim();
+    if (status) {
       const { rows } = await db.query(
         `SELECT *, assigned_to AS employee
            FROM jobs
@@ -16,6 +16,7 @@ router.get('/', async (req, res) => {
       );
       return res.json(rows);
     }
+
     const { rows } = await db.query(`
       SELECT *, assigned_to AS employee
         FROM jobs
@@ -23,6 +24,7 @@ router.get('/', async (req, res) => {
     `);
     res.json(rows);
   } catch (err) {
+    console.error('GET /api/jobs error:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -42,6 +44,7 @@ router.post('/', async (req, res) => {
     );
     res.status(201).json(rows[0]);
   } catch (err) {
+    console.error('POST /api/jobs error:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -67,7 +70,7 @@ router.post('/:id/assign', async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Job not found' });
     res.json(rows[0]);
   } catch (err) {
-    console.error('ASSIGN error', err);
+    console.error('ASSIGN error:', err);
     res.status(500).json({ error: 'Failed to assign job' });
   }
 });
@@ -90,7 +93,7 @@ router.post('/:id/unassign', async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Job not found' });
     res.json(rows[0]);
   } catch (err) {
-    console.error('UNASSIGN error', err);
+    console.error('UNASSIGN error:', err);
     res.status(500).json({ error: 'Failed to unassign job' });
   }
 });
