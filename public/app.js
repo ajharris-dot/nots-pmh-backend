@@ -62,9 +62,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
       card.innerHTML = `
         <div class="photo-container">
-          <img src="${job.employee_photo_url || '/placeholder.png'}" alt="Employee Photo"/>
-          <input type="file" id="${inputId}" class="photo-input" data-id="${job.id}" accept="image/*" style="display:none" />
+          <img 
+          src="${job.employee ? (job.employee_photo_url || '/placeholder.png') : '/placeholder.png'}" 
+          alt="Employee Photo"
+         />
+         <input 
+           type="file" 
+           id="${inputId}" 
+           class="photo-input" 
+           data-id="${job.id}" 
+           accept="image/*" 
+           style="display:none" 
+          />
         </div>
+
 
         <div class="card-body">
           <div class="card-title">
