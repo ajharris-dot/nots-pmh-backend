@@ -1,6 +1,5 @@
 const API = '/api/jobs';
-const PLACEHOLDER = '/placeholder-v2.png?v=20250814'; // bump version if you change the file again
-
+const PLACEHOLDER = './placeholder-v2.png?v=20250814'; // cache-busted placeholder
 
 let ALL_JOBS = [];
 let CURRENT_FILTER = 'all';
@@ -61,23 +60,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const due = job.due_date ? job.due_date.split('T')[0] : '';
       const inputId = `file_${job.id}`;
+      const hasEmployee = !!(job.employee && String(job.employee).trim().length);
 
       card.innerHTML = `
         <div class="photo-container">
-          <img 
-          src="${job.employee ? (job.employee_photo_url || '/placeholder-v2.png') : '/placeholder-v2.png'}" 
-          alt="Employee Photo"
-         />
-         <input 
-           type="file" 
-           id="${inputId}" 
-           class="photo-input" 
-           data-id="${job.id}" 
-           accept="image/*" 
-           style="display:none" 
+          <img
+            class="employee-photo"
+            src="${hasEmployee ? (job.employee_photo_url || PLACEHOLDER) : PLACEHOLDER}"
+            alt="Employee Photo"
+          />
+          <input 
+            type="file" 
+            id="${inputId}" 
+            class="photo-input" 
+            data-id="${job.id}" 
+            accept="image/*" 
+            style="display:none" 
           />
         </div>
-
 
         <div class="card-body">
           <div class="card-title">
@@ -103,6 +103,12 @@ document.addEventListener('DOMContentLoaded', () => {
           <button class="danger" data-action="delete" data-id="${job.id}">Delete</button>
         </div>
       `;
+
+      // Fallback if image fails to load
+      const img = card.querySelector('.photo-container img');
+      if (img) {
+        img.addEventListener('error', () => { img.src = PLACEHOLDER; });
+      }
 
       jobGrid.appendChild(card);
     });
