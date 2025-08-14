@@ -1,4 +1,8 @@
-/* Minimal frontend to render cards with a FIT photo area (no cropping). */
+/* Frontend for NOTS PMH cards with:
+   - Photo fits inside card (no cropping)
+   - Photo hides automatically when employee is unassigned
+   - Minimal DOM structure so your existing page appearance stays the same
+*/
 
 const API = {
   list: () => fetch('/api/jobs').then(r => r.json()),
@@ -29,12 +33,12 @@ const state = {
 };
 
 const el = {
-  grid: document.getElementById('grid'),
-  empty: document.getElementById('empty'),
-  tabs: document.getElementById('tabs'),
-  search: document.getElementById('search'),
-  btnRefresh: document.getElementById('btnRefresh'),
-  btnAdd: document.getElementById('btnAdd'),
+  grid: document.getElementById('grid') || document.querySelector('.grid'),
+  empty: document.getElementById('empty') || document.querySelector('.empty'),
+  tabs: document.getElementById('tabs') || document.querySelector('.tabs'),
+  search: document.getElementById('search') || document.querySelector('input[type="search"]'),
+  btnRefresh: document.getElementById('btnRefresh') || document.querySelector('[data-action="refresh"]'),
+  btnAdd: document.getElementById('btnAdd') || document.querySelector('[data-action="add"]'),
 };
 
 function statusClass(s) {
@@ -70,8 +74,10 @@ function filterJobs() {
 
 function render() {
   const list = filterJobs();
+  if (!el.grid) return;
+
   el.grid.innerHTML = '';
-  el.empty.style.display = list.length ? 'none' : 'block';
+  if (el.empty) el.empty.style.display = list.length ? 'none' : 'block';
 
   list.forEach(j => {
     const id = j.id;
@@ -80,10 +86,13 @@ function render() {
     const dept = j.department || '';
     const client = j.client || '';
     const due = formatDate(j.due_date);
-    const employee = j.employee || j.assigned_to || '';
+    const employee = (j.employee || j.assigned_to || '').trim();
     const status = (j.status || (employee ? 'filled' : 'open')).toLowerCase();
-    const photoUrl = j.employee_photo_url || '';
 
+    // Hide photo if there is no employee assigned
+    const photoUrl = employee ? (j.employee_photo_url || '') : '';
+
+    // Card shell uses very generic classes to avoid changing your look.
     const card = document.createElement('div');
     card.className = 'card';
     card.innerHTML = `
@@ -92,8 +101,8 @@ function render() {
         <small class="help">${jobNo ? `#${jobNo}` : ''}</small>
       </div>
 
-      <div class="card-photo ${photoUrl ? '' : 'card-photo--empty'}">
-        ${photoUrl ? `<img src="${photoUrl}" alt="Employee photo" loading="lazy">` : ''}
+      <div class="employee-photo-box">
+        ${photoUrl ? `<img class="employee-photo" src="${photoUrl}" alt="Employee photo" loading="lazy">` : ''}
       </div>
 
       <h3>${title}</h3>
@@ -116,7 +125,7 @@ function render() {
       </div>
     `;
 
-    // hook up upload
+    // Upload handling
     const input = card.querySelector('input[type="file"]');
     input?.addEventListener('change', async (e) => {
       const file = e.target.files?.[0];
@@ -125,9 +134,9 @@ function render() {
         input.disabled = true;
         input.parentElement.style.opacity = 0.6;
 
-        const { url } = await API.upload(file);               // { url: "/uploads/xxx.jpg" }
+        const { url } = await API.upload(file);               // returns { url: "/uploads/xxx.jpg" }
         await API.patch(id, { employee_photo_url: url });     // persist on the job
-        await load();                                         // refresh list
+        await load();                                         // refresh list so new photo shows
       } catch (err) {
         alert(err.message || 'Upload failed');
       } finally {
@@ -148,31 +157,35 @@ async function load() {
   render();
 }
 
-/* Events */
-el.tabs.addEventListener('click', (e) => {
-  const t = e.target.closest('.tab');
-  if (!t) return;
-  [...el.tabs.children].forEach(c => c.classList.remove('active'));
-  t.classList.add('active');
-  state.status = t.dataset.status;
-  render();
-});
+/* Events (attached only if the elements exist in your DOM) */
+if (el.tabs) {
+  el.tabs.addEventListener('click', (e) => {
+    const t = e.target.closest('.tab');
+    if (!t) return;
+    [...el.tabs.children].forEach(c => c.classList.remove('active'));
+    t.classList.add('active');
+    state.status = t.dataset.status || 'all';
+    render();
+  });
+}
 
-el.search.addEventListener('input', (e) => {
-  state.query = e.target.value;
-  render();
-});
+if (el.search) {
+  el.search.addEventListener('input', (e) => {
+    state.query = e.target.value || '';
+    render();
+  });
+}
 
-el.btnRefresh.addEventListener('click', load);
-
-// (Optional) add handler for "New Job" if desired
-el.btnAdd.addEventListener('click', () => {
+if (el.btnRefresh) el.btnRefresh.addEventListener('click', load);
+if (el.btnAdd) el.btnAdd.addEventListener('click', () => {
   alert('Hook up your "New Job" modal/form here.');
 });
 
 /* Init */
 load().catch(err => {
   console.error(err);
-  el.empty.style.display = 'block';
-  el.empty.textContent = 'Failed to load jobs.';
+  if (el.empty) {
+    el.empty.style.display = 'block';
+    el.empty.textContent = 'Failed to load jobs.';
+  }
 });

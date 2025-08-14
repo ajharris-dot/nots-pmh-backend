@@ -201,3 +201,17 @@ small.help { color: var(--muted); }
   color: var(--muted);
   padding: 40px 12px;
 }
+/* === Employee photo: fit inside, no cropping (isolated) === */
+.employee-photo-box {
+  width: 100%;
+  background: #f6f6f6;      /* subtle backdrop for letterbox space */
+  border-radius: 8px;
+  overflow: hidden;
+}
+.employee-photo-box img.employee-photo {
+  width: 100%;
+  height: auto;             /* keep natural aspect ratio */
+  display: block;
+  object-fit: contain;      /* never crop */
+  object-position: center;
+}
