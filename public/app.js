@@ -26,6 +26,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const isFilled = (j) => !!j.employee || (j.status && j.status.toLowerCase() === 'filled');
 
+  // NEW: update tab counts (All / Open / Filled)
+  function updateTabCounts() {
+    const allTab    = document.querySelector('.filters .tab[data-filter="all"]');
+    const openTab   = document.querySelector('.filters .tab[data-filter="open"]');
+    const filledTab = document.querySelector('.filters .tab[data-filter="filled"]');
+    if (!allTab || !openTab || !filledTab) return;
+
+    const allCount    = ALL_JOBS.length;
+    const openCount   = ALL_JOBS.filter(j => (j.status || '').toLowerCase() === 'open').length;
+    const filledCount = ALL_JOBS.filter(isFilled).length;
+
+    allTab.textContent    = `All (${allCount})`;
+    openTab.textContent   = `Open (${openCount})`;
+    filledTab.textContent = `Filled (${filledCount})`;
+  }
+
   /* ------------ data ------------ */
   async function loadJobs() {
     const qs = CURRENT_FILTER === 'all' ? '' : `?status=${encodeURIComponent(CURRENT_FILTER)}`;
@@ -33,6 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!res.ok) { console.error('Failed to fetch jobs'); return; }
     const data = await res.json();
     ALL_JOBS = Array.isArray(data) ? data : (data.jobs || data.rows || []);
+    updateTabCounts(); // <-- NEW: refresh counts after loading
     render();
   }
 
@@ -96,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="meta-row"><strong>Title:</strong> ${job.title || ''}</div>
             <div class="meta-row"><strong>Department:</strong> ${job.department || ''}</div>
             <div class="meta-row"><strong>Due:</strong> ${due}</div>
-            ${job.assigned_at ? `<div class="meta-row"><strong>Assigned:</strong> ${job.assigned_at}</div>` : ''}
+            ${job.assigned_at ? `<div class="meta-row"><strong>Assigned:</strong> ${assignedAt || job.assigned_at}</div>` : ''}
             ${job.filled_date ? `<div class="meta-row"><strong>Filled:</strong> ${job.filled_date}</div>` : ''}
             <div class="meta-row"><strong>Employee:</strong> ${job.employee || 'Unassigned'}</div>
           </div>

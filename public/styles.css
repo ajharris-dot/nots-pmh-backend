@@ -134,3 +134,10 @@ button{ cursor:pointer; border-radius:8px; padding:8px 12px; border:1px solid tr
   display: block;
   background: #f6f6f6;   /* optional: neutral backdrop for empty space */
 }
+/* Slightly larger filter tabs for label + count */
+.filters .tab {
+  padding: 8px 14px;
+  font-size: 14px;
+  line-height: 1.1;
+}
+
