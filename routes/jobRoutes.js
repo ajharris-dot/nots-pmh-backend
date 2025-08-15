@@ -9,7 +9,8 @@ router.get('/', async (req, res) => {
     const queryBase = `
       SELECT *,
              assigned_to AS employee,
-             TO_CHAR(filled_date, 'YYYY-MM-DD') AS filled_date
+             TO_CHAR(assigned_at, 'YYYY-MM-DD') AS assigned_at,   -- added
+             TO_CHAR(filled_date, 'YYYY-MM-DD')  AS filled_date
         FROM jobs
     `;
     

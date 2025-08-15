@@ -63,8 +63,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const due = job.due_date ? job.due_date.split('T')[0] : '';
         const assignedAt = job.assigned_at
-          ? new Date(job.assigned_at).toLocaleDateString()
+          ? (/^\d{4}-\d{2}-\d{2}$/.test(job.assigned_at) ? job.assigned_at : new Date(job.assigned_at).toLocaleDateString())
           : '';
+
         const inputId = `file_${job.id}`;
         const hasEmployee = !!(job.employee && String(job.employee).trim().length);
 
