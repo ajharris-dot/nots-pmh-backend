@@ -16,8 +16,24 @@ document.addEventListener('DOMContentLoaded', () => {
   const cancelModal = document.getElementById('cancelModal');
 
   /* Rename the modal label from "Due Date" -> "Filled Date" (UI only) */
-  const filledDateLabel = document.querySelector('label[for="dueDate"]');
-  if (filledDateLabel) filledDateLabel.textContent = 'Filled Date';
+  {
+    const dueInput = document.getElementById('dueDate');
+    if (dueInput) {
+      const labelEl = dueInput.closest('label');
+      if (labelEl) {
+        // If the first child is a text node ("Due Date"), replace it
+        const firstNode = labelEl.childNodes[0];
+        if (firstNode && firstNode.nodeType === Node.TEXT_NODE) {
+          firstNode.textContent = 'Filled Date ';
+        } else {
+          // Fallback: inject a text node at the start
+          labelEl.insertBefore(document.createTextNode('Filled Date '), labelEl.firstChild);
+        }
+        // optional: accessibility hint
+        dueInput.setAttribute('aria-label', 'Filled Date');
+      }
+    }
+  }
 
   /* ------------ helpers ------------ */
   const fmtDate = (d) => {
@@ -56,12 +72,35 @@ document.addEventListener('DOMContentLoaded', () => {
   /* ------------ data ------------ */
   async function loadJobs() {
     const qs = CURRENT_FILTER === 'all' ? '' : `?status=${encodeURIComponent(CURRENT_FILTER)}`;
-    const res = await fetch(`${API}${qs}`);
-    if (!res.ok) { console.error('Failed to fetch jobs'); return; }
-    const data = await res.json();
-    ALL_JOBS = Array.isArray(data) ? data : (data.jobs || data.rows || []);
-    updateTabCounts(); // refresh counts after loading
-    render();
+    try {
+      const res = await fetch(`${API}${qs}`);
+      if (!res.ok) {
+        const msg = await res.text().catch(()=>'');
+        console.error('Failed to fetch jobs:', res.status, msg);
+        if (jobGrid) {
+          jobGrid.innerHTML = `<div style="color:#b91c1c">
+            Error loading jobs (HTTP ${res.status}). ${msg || 'See console for details.'}
+          </div>`;
+        }
+        ALL_JOBS = [];
+        updateTabCounts();
+        return;
+      }
+      const data = await res.json();
+      ALL_JOBS = Array.isArray(data) ? data : (data.jobs || data.rows || []);
+      console.log(`[debug] Loaded ${ALL_JOBS.length} jobs`, ALL_JOBS[0] || {});
+      updateTabCounts(); // refresh counts after loading
+      render();
+    } catch (err) {
+      console.error('Fetch /api/jobs threw:', err);
+      if (jobGrid) {
+        jobGrid.innerHTML = `<div style="color:#b91c1c">
+          Error loading jobs (network/JS). See console for details.
+        </div>`;
+      }
+      ALL_JOBS = [];
+      updateTabCounts();
+    }
   }
 
   /* ------------ UI render ------------ */
@@ -186,7 +225,8 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.filters .tab').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      CURRENT_FILTER = (btn.dataset.filter || 'all');
+      // normalize to lower-case for internal logic & API
+      CURRENT_FILTER = String(btn.dataset.filter || 'all').toLowerCase();
       loadJobs();
     });
   });
