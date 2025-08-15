@@ -26,11 +26,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const isFilled = (j) => !!j.employee || (j.status && j.status.toLowerCase() === 'filled');
 
-  // NEW: update tab counts (All / Open / Filled)
+  // Find a tab by its data-filter value, case-insensitive
+  function findTab(name) {
+    const target = String(name || '').toLowerCase();
+    return [...document.querySelectorAll('.filters .tab')]
+      .find(t => (t.dataset.filter || '').toLowerCase() === target);
+  }
+
+  // Update tab counts (All / Open / Filled)
   function updateTabCounts() {
-    const allTab    = document.querySelector('.filters .tab[data-filter="all"]');
-    const openTab   = document.querySelector('.filters .tab[data-filter="open"]');
-    const filledTab = document.querySelector('.filters .tab[data-filter="filled"]');
+    const allTab    = findTab('all');
+    const openTab   = findTab('open');
+    const filledTab = findTab('filled');
     if (!allTab || !openTab || !filledTab) return;
 
     const allCount    = ALL_JOBS.length;
@@ -49,7 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!res.ok) { console.error('Failed to fetch jobs'); return; }
     const data = await res.json();
     ALL_JOBS = Array.isArray(data) ? data : (data.jobs || data.rows || []);
-    updateTabCounts(); // <-- NEW: refresh counts after loading
+    updateTabCounts(); // refresh counts after loading
     render();
   }
 
@@ -60,13 +67,17 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!jobGrid) return;
       jobGrid.innerHTML = '';
 
+      const current = String(CURRENT_FILTER || 'all').toLowerCase();
       const filtered = ALL_JOBS.filter(j => {
         const text = `${j.job_number || ''} ${j.title || ''} ${j.department || ''}`.toLowerCase();
-        return (CURRENT_FILTER === 'all' || j.status === CURRENT_FILTER) && (!q || text.includes(q));
+        const statusOk = current === 'all' || String(j.status || '').toLowerCase() === current;
+        return statusOk && (!q || text.includes(q));
       });
 
       if (!filtered.length) {
         jobGrid.innerHTML = `<div style="color:#6b7280">No positions</div>`;
+        // keep counts accurate even when empty
+        updateTabCounts();
         return;
       }
 
@@ -119,7 +130,6 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
          </div>
 
-
           <div class="card-actions">
             ${isFilled(job)
               ? `<button class="upload-btn" data-action="trigger-upload" data-input="${inputId}">Upload Photo</button>
@@ -139,6 +149,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         jobGrid.appendChild(card);
       });
+
+      // ensure counts stay in sync after render, too
+      updateTabCounts();
     } catch (err) {
       console.error('Render error:', err);
       if (jobGrid) jobGrid.innerHTML = `<div style="color:#b91c1c">Error loading jobs. Check console.</div>`;
@@ -169,7 +182,8 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.filters .tab').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      CURRENT_FILTER = btn.dataset.filter;
+      // normalize filter value (handles 'Open' vs 'open')
+      CURRENT_FILTER = (btn.dataset.filter || 'all');
       loadJobs();
     });
   });
