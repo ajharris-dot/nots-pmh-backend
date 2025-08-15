@@ -89,7 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
           ? `<span class="badge badge-filled">Filled</span>`
           : `<span class="badge badge-open">Open</span>`;
 
-        const due = job.due_date ? job.due_date.split('T')[0] : '';
+        const filled = job.filled_date ? job.filled_date.split('T')[0] : '';
         const assignedAt = job.assigned_at
           ? (/^\d{4}-\d{2}-\d{2}$/.test(job.assigned_at) ? job.assigned_at : new Date(job.assigned_at).toLocaleDateString())
           : '';
@@ -123,7 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="card-meta">
             <div class="meta-row"><strong>Title:</strong> ${job.title || ''}</div>
             <div class="meta-row"><strong>Department:</strong> ${job.department || ''}</div>
-            <div class="meta-row"><strong>Due:</strong> ${due}</div>
+            <div class="meta-row"><strong>Filled:</strong> ${filled}</div>
             ${job.assigned_at ? `<div class="meta-row"><strong>Assigned:</strong> ${assignedAt || job.assigned_at}</div>` : ''}
             ${job.filled_date ? `<div class="meta-row"><strong>Filled:</strong> ${job.filled_date}</div>` : ''}
             <div class="meta-row"><strong>Employee:</strong> ${job.employee || 'Unassigned'}</div>
@@ -167,7 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('jobNumber').value = job.job_number || '';
       document.getElementById('jobTitle').value = job.title || '';
       document.getElementById('department').value = job.department || '';
-      document.getElementById('dueDate').value = fmtDate(job.due_date);
+      document.getElementById('filledDate').value = fmtDate(job.filled_date);
       document.getElementById('employee').value = job.employee || '';
     } else {
       modalTitle.textContent = 'Add Position';
@@ -201,7 +201,7 @@ document.addEventListener('DOMContentLoaded', () => {
       job_number: document.getElementById('jobNumber').value,
       title: document.getElementById('jobTitle').value,
       department: document.getElementById('department').value,
-      due_date: document.getElementById('dueDate').value
+      filled_date: document.getElementById('filledDate').value
     };
     if (id) {
       await fetch(`${API}/${id}`, {

@@ -32,16 +32,16 @@ router.get('/', async (req, res) => {
 
 // POST a new job (set assigned_at if assigned_to provided)
 router.post('/', async (req, res) => {
-  const { title, description, client, due_date, assigned_to, status } = req.body;
+  const { title, description, client, filled_date, assigned_to, status } = req.body;
   try {
     const { rows } = await db.query(
       `INSERT INTO jobs
-         (title, description, client, due_date, assigned_to, status, assigned_at)
+         (title, description, client, filled_date, assigned_to, status, assigned_at)
        VALUES
          ($1, $2, $3, $4, $5, COALESCE($6, 'Open'),
           CASE WHEN $5 IS NOT NULL AND $5 <> '' THEN NOW() ELSE NULL END)
        RETURNING *`,
-      [title, description, client, due_date, assigned_to || null, status]
+      [title, description, client, filled_date, assigned_to || null, status]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
