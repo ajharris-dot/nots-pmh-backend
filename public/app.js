@@ -15,6 +15,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const jobForm = document.getElementById('jobForm');
   const cancelModal = document.getElementById('cancelModal');
 
+  /* Rename the modal label from "Due Date" -> "Filled Date" (UI only) */
+  const filledDateLabel = document.querySelector('label[for="dueDate"]');
+  if (filledDateLabel) filledDateLabel.textContent = 'Filled Date';
+
   /* ------------ helpers ------------ */
   const fmtDate = (d) => {
     if (!d) return '';
@@ -76,7 +80,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (!filtered.length) {
         jobGrid.innerHTML = `<div style="color:#6b7280">No positions</div>`;
-        // keep counts accurate even when empty
         updateTabCounts();
         return;
       }
@@ -89,7 +92,9 @@ document.addEventListener('DOMContentLoaded', () => {
           ? `<span class="badge badge-filled">Filled</span>`
           : `<span class="badge badge-open">Open</span>`;
 
-        const filled = job.filled_date ? job.filled_date.split('T')[0] : '';
+        // We still use due_date value, but show it as "Filled Date" in the UI
+        const filledDateValue = job.due_date ? job.due_date.split('T')[0] : '';
+
         const assignedAt = job.assigned_at
           ? (/^\d{4}-\d{2}-\d{2}$/.test(job.assigned_at) ? job.assigned_at : new Date(job.assigned_at).toLocaleDateString())
           : '';
@@ -123,7 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="card-meta">
             <div class="meta-row"><strong>Title:</strong> ${job.title || ''}</div>
             <div class="meta-row"><strong>Department:</strong> ${job.department || ''}</div>
-            <div class="meta-row"><strong>Filled:</strong> ${filled}</div>
+            <div class="meta-row"><strong>Filled Date:</strong> ${filledDateValue || '—'}</div>
             ${job.assigned_at ? `<div class="meta-row"><strong>Assigned:</strong> ${assignedAt || job.assigned_at}</div>` : ''}
             ${job.filled_date ? `<div class="meta-row"><strong>Filled:</strong> ${job.filled_date}</div>` : ''}
             <div class="meta-row"><strong>Employee:</strong> ${job.employee || 'Unassigned'}</div>
@@ -150,7 +155,6 @@ document.addEventListener('DOMContentLoaded', () => {
         jobGrid.appendChild(card);
       });
 
-      // ensure counts stay in sync after render, too
       updateTabCounts();
     } catch (err) {
       console.error('Render error:', err);
@@ -167,7 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('jobNumber').value = job.job_number || '';
       document.getElementById('jobTitle').value = job.title || '';
       document.getElementById('department').value = job.department || '';
-      document.getElementById('filledDate').value = fmtDate(job.filled_date);
+      document.getElementById('dueDate').value = fmtDate(job.due_date); // still uses the same field
       document.getElementById('employee').value = job.employee || '';
     } else {
       modalTitle.textContent = 'Add Position';
@@ -182,7 +186,6 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.filters .tab').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      // normalize filter value (handles 'Open' vs 'open')
       CURRENT_FILTER = (btn.dataset.filter || 'all');
       loadJobs();
     });
@@ -201,7 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
       job_number: document.getElementById('jobNumber').value,
       title: document.getElementById('jobTitle').value,
       department: document.getElementById('department').value,
-      filled_date: document.getElementById('filledDate').value
+      due_date: document.getElementById('dueDate').value // same field; UI label changed
     };
     if (id) {
       await fetch(`${API}/${id}`, {
