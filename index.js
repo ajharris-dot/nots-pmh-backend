@@ -82,7 +82,7 @@ app.get('/api/jobs', async (req, res) => {
         client AS department,
         assigned_to AS employee,
         employee_photo_url,
-        due_date,
+        filled_date,
         status,
         created_at
       FROM jobs
@@ -114,7 +114,7 @@ app.get('/api/jobs/:id', async (req, res) => {
         client AS department,
         assigned_to AS employee,
         employee_photo_url,
-        due_date,
+        filled_date,
         status,
         created_at
       FROM jobs
@@ -130,17 +130,17 @@ app.get('/api/jobs/:id', async (req, res) => {
 
 // CREATE (no assignment at create; starts Open unless provided)
 app.post('/api/jobs', async (req, res) => {
-  const { title, job_number, department, due_date, status } = req.body || {};
+  const { title, job_number, department, filled_date, status } = req.body || {};
   try {
     const db = require('./models/db');
     const effectiveStatus = status || 'Open';
     const { rows } = await db.query(
-      `INSERT INTO jobs (title, description, client, due_date, assigned_to, status)
+      `INSERT INTO jobs (title, description, client, filled_date, assigned_to, status)
        VALUES ($1, $2, $3, $4, NULL, $5)
        RETURNING
          id, title, description AS job_number, client AS department,
-         assigned_to AS employee, employee_photo_url, due_date, status, created_at`,
-      [title, job_number || null, department || null, due_date || null, effectiveStatus]
+         assigned_to AS employee, employee_photo_url, filled_date, status, created_at`,
+      [title, job_number || null, department || null, filled_date || null, effectiveStatus]
     );
     res.status(201).json(rows[0]);
   } catch (e) {
@@ -157,7 +157,7 @@ app.patch('/api/jobs/:id', async (req, res) => {
       title,
       job_number,
       department,
-      due_date,
+      filled_date,
       employee,
       status,
       employee_photo_url
@@ -167,7 +167,7 @@ app.patch('/api/jobs/:id', async (req, res) => {
       title,
       description: job_number,       // job_number -> description
       client: department,            // department -> client
-      due_date,
+      filled_date,
       assigned_to: employee,         // employee -> assigned_to
       status,
       employee_photo_url             // allow updating photo URL
@@ -185,7 +185,7 @@ app.patch('/api/jobs/:id', async (req, res) => {
       `UPDATE jobs SET ${set.join(', ')} WHERE id = $${i}
        RETURNING
          id, title, description AS job_number, client AS department,
-         assigned_to AS employee, employee_photo_url, due_date, status, created_at`,
+         assigned_to AS employee, employee_photo_url, filled_date, status, created_at`,
       vals
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
@@ -222,7 +222,7 @@ app.post('/api/jobs/:id/assign', async (req, res) => {
        WHERE id = $2
        RETURNING
          id, title, description AS job_number, client AS department,
-         assigned_to AS employee, employee_photo_url, due_date, status, created_at`,
+         assigned_to AS employee, employee_photo_url, filled_date, status, created_at`,
       [employee, req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
@@ -243,7 +243,7 @@ app.post('/api/jobs/:id/unassign', async (req, res) => {
        WHERE id = $1
        RETURNING
          id, title, description AS job_number, client AS department,
-         assigned_to AS employee, employee_photo_url, due_date, status, created_at`,
+         assigned_to AS employee, employee_photo_url, filled_date, status, created_at`,
       [req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
