@@ -91,14 +91,16 @@ document.addEventListener('DOMContentLoaded', () => {
               ${statusBadge}
             </div>
 
-            <div class="card-meta">
-              <div class="meta-row"><strong>Title:</strong> ${job.title || ''}</div>
-              <div class="meta-row"><strong>Department:</strong> ${job.department || ''}</div>
-              <div class="meta-row"><strong>Due:</strong> ${due}</div>
-              ${assignedAt ? `<div class="meta-row"><strong>Assigned:</strong> ${assignedAt}</div>` : ''}
-              <div class="meta-row"><strong>Employee:</strong> ${job.employee || 'Unassigned'}</div>
-            </div>
+          <div class="card-meta">
+            <div class="meta-row"><strong>Title:</strong> ${job.title || ''}</div>
+            <div class="meta-row"><strong>Department:</strong> ${job.department || ''}</div>
+            <div class="meta-row"><strong>Due:</strong> ${due}</div>
+            ${job.assigned_at ? `<div class="meta-row"><strong>Assigned:</strong> ${job.assigned_at}</div>` : ''}
+            ${job.filled_date ? `<div class="meta-row"><strong>Filled:</strong> ${job.filled_date}</div>` : ''}
+            <div class="meta-row"><strong>Employee:</strong> ${job.employee || 'Unassigned'}</div>
           </div>
+         </div>
+
 
           <div class="card-actions">
             ${isFilled(job)

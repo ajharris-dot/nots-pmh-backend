@@ -6,22 +6,22 @@ const db = require('../models/db');
 router.get('/', async (req, res) => {
   try {
     const status = req.query.status && String(req.query.status).trim();
+    const queryBase = `
+      SELECT *,
+             assigned_to AS employee,
+             TO_CHAR(filled_date, 'YYYY-MM-DD') AS filled_date
+        FROM jobs
+    `;
+    
     if (status) {
       const { rows } = await db.query(
-        `SELECT *, assigned_to AS employee
-           FROM jobs
-          WHERE LOWER(status) = LOWER($1)
-          ORDER BY created_at DESC`,
+        `${queryBase} WHERE LOWER(status) = LOWER($1) ORDER BY created_at DESC`,
         [status]
       );
       return res.json(rows);
     }
 
-    const { rows } = await db.query(`
-      SELECT *, assigned_to AS employee
-        FROM jobs
-       ORDER BY created_at DESC
-    `);
+    const { rows } = await db.query(`${queryBase} ORDER BY created_at DESC`);
     res.json(rows);
   } catch (err) {
     console.error('GET /api/jobs error:', err);
