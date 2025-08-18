@@ -83,7 +83,7 @@ app.get('/api/jobs', async (req, res) => {
         assigned_to AS employee,
         employee_photo_url,
         due_date,
-        filled_date,            -- ensure this is included
+        filled_date,
         status,
         created_at
       FROM jobs
@@ -116,7 +116,7 @@ app.get('/api/jobs/:id', async (req, res) => {
         assigned_to AS employee,
         employee_photo_url,
         due_date,
-        filled_date,            -- ensure this is included
+        filled_date,
         status,
         created_at
       FROM jobs
@@ -161,7 +161,7 @@ app.patch('/api/jobs/:id', async (req, res) => {
       job_number,
       department,
       due_date,
-      filled_date,             // <--add this
+      filled_date,             // keep this; no mirroring
       employee,
       status,
       employee_photo_url
@@ -171,10 +171,8 @@ app.patch('/api/jobs/:id', async (req, res) => {
       title,
       description: job_number,       // job_number -> description
       client: department,            // department -> client
-      due_date,                      // accepts null to clear
-      filled_date,                   // <-- allow direct updates
-      // (optional) keep filled_date aligned with due_date if provided:
-      ...(due_date !== undefined ? { filled_date: due_date } : {}),
+      due_date,                      // independent; may be unused by UI
+      filled_date,                   // user-controlled; do not mirror from due_date
       assigned_to: employee,         // employee -> assigned_to
       status,
       employee_photo_url             // allow updating photo URL
@@ -223,17 +221,17 @@ app.post('/api/jobs/:id/assign', async (req, res) => {
     const { employee } = req.body || {};
     if (!employee) return res.status(400).json({ error: 'employee required' });
 
-     const { rows } = await db.query(
-       `UPDATE jobs
-        SET assigned_to = $1,
-            status = 'Filled',
-            filled_date = COALESCE(filled_date, CURRENT_DATE)
-        WHERE id = $2
-        RETURNING
-          id, title, description AS job_number, client AS department,
-          assigned_to AS employee, employee_photo_url, due_date, filled_date, status, created_at`,
-       [employee, req.params.id]
-     );
+    const { rows } = await db.query(
+      `UPDATE jobs
+       SET assigned_to = $1,
+           status = 'Filled',
+           filled_date = COALESCE(filled_date, CURRENT_DATE)
+       WHERE id = $2
+       RETURNING
+         id, title, description AS job_number, client AS department,
+         assigned_to AS employee, employee_photo_url, due_date, filled_date, status, created_at`,
+      [employee, req.params.id]
+    );
 
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
