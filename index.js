@@ -161,7 +161,7 @@ app.patch('/api/jobs/:id', async (req, res) => {
       job_number,
       department,
       due_date,
-      filled_date,             // <-- keep this
+      filled_date,             // <--add this
       employee,
       status,
       employee_photo_url
@@ -171,8 +171,10 @@ app.patch('/api/jobs/:id', async (req, res) => {
       title,
       description: job_number,       // job_number -> description
       client: department,            // department -> client
-      due_date,                      // accepts null to clear (independent)
-      filled_date,                   // <-- allow direct updates (no mirroring)
+      due_date,                      // accepts null to clear
+      filled_date,                   // <-- allow direct updates
+      // (optional) keep filled_date aligned with due_date if provided:
+      ...(due_date !== undefined ? { filled_date: due_date } : {}),
       assigned_to: employee,         // employee -> assigned_to
       status,
       employee_photo_url             // allow updating photo URL
