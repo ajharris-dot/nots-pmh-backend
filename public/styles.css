@@ -82,10 +82,9 @@ button{ cursor:pointer; border-radius:8px; padding:8px 12px; border:1px solid tr
 /* Card grid */
 .card-grid{
   display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); /* auto-fit can fill gaps a bit better */
-  gap:16px;
-}
-
+  grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); /* auto-fit can fill gaps better */
+  gap:24px;  /* increased spacing between cards */
+  padding: 10px 0; /* optional: vertical breathing room */
 }
 
 /* Job card */
@@ -93,8 +92,14 @@ button{ cursor:pointer; border-radius:8px; padding:8px 12px; border:1px solid tr
   background:var(--panel);
   border:1px solid var(--line);
   border-radius:12px;
-  box-shadow:0 2px 6px rgba(0,0,0,0.06);
+  box-shadow:0 4px 12px rgba(0,0,0,0.12); /* deeper shadow */
   overflow:hidden;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.job-card:hover {
+  box-shadow:0 6px 18px rgba(0,0,0,0.16); /* stronger hover shadow */
+  transform: translateY(-2px);             /* small hover lift */
 }
 
 .photo-container{ position:relative; background:var(--accent-100); }
