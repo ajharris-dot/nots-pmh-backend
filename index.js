@@ -83,7 +83,7 @@ app.get('/api/jobs', async (req, res) => {
         assigned_to AS employee,
         employee_photo_url,
         due_date,
-        filled_date,            -- ADDED: include filled_date in list responses
+        filled_date,            -- ensure this is included
         status,
         created_at
       FROM jobs
@@ -116,7 +116,7 @@ app.get('/api/jobs/:id', async (req, res) => {
         assigned_to AS employee,
         employee_photo_url,
         due_date,
-        filled_date,            -- ADDED: include filled_date in single fetch
+        filled_date,            -- ensure this is included
         status,
         created_at
       FROM jobs
@@ -133,17 +133,17 @@ app.get('/api/jobs/:id', async (req, res) => {
 // CREATE (no assignment at create; starts Open unless provided)
 // Make date optional: accept blank/absent date; if provided, initialize filled_date to same date.
 app.post('/api/jobs', async (req, res) => {
-  const { title, job_number, department, due_date, status } = req.body || {};
+  const { title, job_number, department, due_date, status, filled_date } = req.body || {};
   try {
     const db = require('./models/db');
     const effectiveStatus = status || 'Open';
     const { rows } = await db.query(
       `INSERT INTO jobs (title, description, client, due_date, filled_date, assigned_to, status)
-       VALUES ($1, $2, $3, NULLIF($4,'')::date, NULLIF($4,'')::date, NULL, $5)   -- CHANGED: make optional & mirror if present
+       VALUES ($1, $2, $3, NULLIF($4,'')::date, NULLIF($5,'')::date, NULL, $6)
        RETURNING
          id, title, description AS job_number, client AS department,
          assigned_to AS employee, employee_photo_url, due_date, filled_date, status, created_at`,
-      [title, job_number || null, department || null, due_date ?? null, effectiveStatus]
+      [title, job_number || null, department || null, due_date ?? null, filled_date ?? null, effectiveStatus]
     );
     res.status(201).json(rows[0]);
   } catch (e) {
@@ -161,6 +161,7 @@ app.patch('/api/jobs/:id', async (req, res) => {
       job_number,
       department,
       due_date,
+      filled_date,             // <--add this
       employee,
       status,
       employee_photo_url
@@ -171,6 +172,7 @@ app.patch('/api/jobs/:id', async (req, res) => {
       description: job_number,       // job_number -> description
       client: department,            // department -> client
       due_date,                      // accepts null to clear
+      filled_date,                   // <-- allow direct updates
       // (optional) keep filled_date aligned with due_date if provided:
       ...(due_date !== undefined ? { filled_date: due_date } : {}),
       assigned_to: employee,         // employee -> assigned_to
