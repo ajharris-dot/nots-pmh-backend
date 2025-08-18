@@ -1,143 +1,310 @@
-:root{
-  --bg:#f6f6f7;
-  --panel:#ffffff;
-  --text:#1f2937;
-  --muted:#6b7280;
-  --line:#e5e7eb;
-  --accent:#7a1f2b;     /* maroon */
-  --accent-600:#631823; /* darker maroon */
-  --accent-100:#f4e9eb; /* pale maroon */
-  --ok:#2e7d32;
-  --danger:#b91c1c;
-}
+const API = '/api/jobs';
+const PLACEHOLDER = './placeholder-v2.png?v=20250814'; // cache-busted placeholder
 
-*{ box-sizing:border-box; }
-html,body{ margin:0; padding:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; background:var(--bg); color:var(--text); }
+let ALL_JOBS = [];
+let CURRENT_FILTER = 'all';
 
-/* Top bar */
-.topbar{
-  position:sticky; top:0; z-index:100;
-  background:#800020; color:#fff;
-  display:flex; gap:16px; align-items:center; justify-content:space-between;
-  padding:12px 20px;
-}
-.topbar h1{ font-size:20px; margin:0; }
-.topbar-actions{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+document.addEventListener('DOMContentLoaded', () => {
+  const jobGrid = document.getElementById('jobGrid');
+  const addJobBtn = document.getElementById('addJobBtn');
+  const refreshBtn = document.getElementById('refresh');
+  const search = document.getElementById('search');
 
-/* Buttons */
-button{ cursor:pointer; border-radius:8px; padding:8px 12px; border:1px solid transparent; font-weight:600; }
-.primary{ background:var(--accent); color:#fff; }
-.primary:hover{ background:var(--accent-600); }
-.secondary{ background:#fff; color:var(--text); border:1px solid var(--line); }
-.secondary:hover{ background:#fafafa; }
-.danger{ background:var(--danger); color:#fff; }
-.danger:hover{ filter:brightness(0.95); }
+  const jobModal = document.getElementById('jobModal');
+  const modalTitle = document.getElementById('modalTitle');
+  const jobForm = document.getElementById('jobForm');
+  const cancelModal = document.getElementById('cancelModal');
 
-/* Filters */
-.filters{ display:flex; gap:6px; }
-.filters .tab{
-  background:#222; color:#ddd; border:1px solid #333;
-}
-.filters .tab.active{ background:#444; color:#fff; }
+  /* Rename the modal label from "Due Date" -> "Filled Date" (UI only) */
+  const filledDateLabel = document.querySelector('label[for="dueDate"]');
+  if (filledDateLabel) filledDateLabel.textContent = 'Filled Date';
 
-/* Main wrapper */
-.content{ max-width:1200px; margin:18px auto; padding:0 16px; }
+  /* ------------ helpers ------------ */
+  const fmtDate = (d) => {
+    if (!d) return '';
+    const s = String(d);
+    const only = s.includes('T') ? s.split('T')[0] : s;
+    const [y, m, day] = only.split('-');
+    return (y && m && day) ? `${y}-${m}-${day}` : only;
+  };
 
-/* Search bar */
-.toolbar{ margin-bottom:12px; }
-.toolbar input{
-  width:100%; border:1px solid var(--line); border-radius:8px; padding:10px 12px; outline:none;
-}
+  const isFilled = (j) => !!j.employee || (j.status && j.status.toLowerCase() === 'filled');
 
-/* Card grid */
-.card-grid{
-  display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
-  gap:16px;
-}
+  // Find a tab by its data-filter value, case-insensitive
+  function findTab(name) {
+    const target = String(name || '').toLowerCase();
+    return [...document.querySelectorAll('.filters .tab')]
+      .find(t => (t.dataset.filter || '').toLowerCase() === target);
+  }
 
-/* Job card */
-.job-card{
-  background:var(--panel);
-  border:1px solid var(--line);
-  border-radius:12px;
-  box-shadow:0 2px 6px rgba(0,0,0,0.06);
-  overflow:hidden;
-}
+  // Update tab counts (All / Open / Filled)
+  function updateTabCounts() {
+    const allTab    = findTab('all');
+    const openTab   = findTab('open');
+    const filledTab = findTab('filled');
+    if (!allTab || !openTab || !filledTab) return;
 
-.photo-container{ position:relative; background:var(--accent-100); }
-.job-card img{
-  display:block; width:100%; height:180px; object-fit:cover;
-}
+    const allCount    = ALL_JOBS.length;
+    const openCount   = ALL_JOBS.filter(j => (j.status || '').toLowerCase() === 'open').length;
+    const filledCount = ALL_JOBS.filter(isFilled).length;
 
-.card-body{ padding:12px 12px 6px 12px; }
-.card-title{
-  display:flex; align-items:baseline; gap:8px; margin:0 0 6px 0;
-}
-.card-title h3{ margin:0; font-size:18px; font-weight:700; }
-.badge{
-  font-size:12px; padding:2px 6px; border-radius:999px; border:1px solid var(--line); color:var(--muted); background:#fff;
-}
-.badge-open{ background:#f8fafc; border-color:#e2e8f0; color:#0f766e; }
-.badge-filled{ background:#fdf2f2; border-color:#fee2e2; color:#991b1b; }
+    allTab.textContent    = `All (${allCount})`;
+    openTab.textContent   = `Open (${openCount})`;
+    filledTab.textContent = `Filled (${filledCount})`;
+  }
 
-.card-meta{ margin:6px 0 10px 0; color:var(--muted); font-size:14px; display:grid; row-gap:3px; }
-.meta-row strong{ color:var(--text); font-weight:600; margin-right:6px; }
+  /* ------------ data ------------ */
+  async function loadJobs() {
+    const qs = CURRENT_FILTER === 'all' ? '' : `?status=${encodeURIComponent(CURRENT_FILTER)}`;
+    try {
+      const res = await fetch(`${API}${qs}`);
+      if (!res.ok) {
+        const msg = await res.text().catch(()=>'');
+        console.error('Failed to fetch jobs:', res.status, msg);
+        if (jobGrid) {
+          jobGrid.innerHTML = `<div style="color:#b91c1c">
+            Error loading jobs (HTTP ${res.status}). ${msg || 'See console for details.'}
+          </div>`;
+        }
+        ALL_JOBS = [];
+        updateTabCounts();
+        return;
+      }
+      const data = await res.json();
+      ALL_JOBS = Array.isArray(data) ? data : (data.jobs || data.rows || []);
+      console.log(`[debug] Loaded ${ALL_JOBS.length} jobs`, ALL_JOBS[0] || {});
+      updateTabCounts(); // refresh counts after loading
+      render();
+    } catch (err) {
+      console.error('Fetch /api/jobs threw:', err);
+      if (jobGrid) {
+        jobGrid.innerHTML = `<div style="color:#b91c1c">
+          Error loading jobs (network/JS). See console for details.
+        </div>`;
+      }
+      ALL_JOBS = [];
+      updateTabCounts();
+    }
+  }
 
-.card-actions{
-  display:flex; gap:8px; padding:10px 12px 12px 12px; border-top:1px solid var(--line);
-  flex-wrap:wrap;
-}
+  /* ------------ UI render ------------ */
+  function render() {
+    try {
+      const q = (search?.value || '').trim().toLowerCase();
+      if (!jobGrid) return;
+      jobGrid.innerHTML = '';
 
-/* Upload button (only renders on Filled cards in JS) */
-.upload-btn{
-  background:var(--accent); color:#fff; border:none; padding:8px 10px; border-radius:8px;
-}
-.upload-btn:hover{ background:var(--accent-600); }
+      const current = String(CURRENT_FILTER || 'all').toLowerCase();
+      const filtered = ALL_JOBS.filter(j => {
+        const text = `${j.job_number || ''} ${j.title || ''} ${j.department || ''}`.toLowerCase();
+        const statusOk = current === 'all' || String(j.status || '').toLowerCase() === current;
+        return statusOk && (!q || text.includes(q));
+      });
 
-/* Modal */
-.modal.hidden{ display:none; }
-.modal{
-  position:fixed; inset:0; background:rgba(0,0,0,0.45);
-  display:flex; align-items:center; justify-content:center; z-index:1000;
-}
-.modal-card{
-  width:min(520px,95vw); background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px;
-  box-shadow:0 10px 30px rgba(0,0,0,0.2);
-}
-.modal-card h2{ margin:0 0 12px 0; }
+      if (!filtered.length) {
+        jobGrid.innerHTML = `<div style="color:#6b7280">No positions</div>`;
+        updateTabCounts();
+        return;
+      }
 
-#jobForm label{ display:block; font-weight:600; margin:10px 0 4px 0; }
-#jobForm input{
-  width:100%; border:1px solid var(--line); border-radius:8px; padding:10px 12px; outline:none;
-}
-.modal-actions{ display:flex; gap:10px; margin-top:14px; justify-content:flex-end; }
-/* ============================
-   Job Card Photo Styling
-   ============================ */
-.photo-container {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;   /* Change ratio if you want taller/shorter photo area */
-  overflow: hidden;
-  background: var(--accent-100); /* fallback color before photo loads */
-  border-bottom: 1px solid var(--line);
-}
+      filtered.forEach(job => {
+        const card = document.createElement('div');
+        card.className = 'job-card';
 
-.photo-container img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;   /* ✅ Fits whole image, no cropping */
-  object-position: center; /* Center the image in the box */
-  display: block;
-  background: #f6f6f6;   /* optional: neutral backdrop for empty space */
-}
-/* Slightly larger filter tabs for label + count */
-.filters .tab {
-  padding: 8px 14px;
-  font-size: 14px;
-  line-height: 1.1;
-}
+        const statusBadge = isFilled(job)
+          ? `<span class="badge badge-filled">Filled</span>`
+          : `<span class="badge badge-open">Open</span>`;
 
+        // We still use due_date value, but show it as "Filled Date" in the UI
+        const filledDateValue = job.due_date ? job.due_date.split('T')[0] : '';
+
+        const assignedAt = job.assigned_at
+          ? (/^\d{4}-\d{2}-\d{2}$/.test(job.assigned_at) ? job.assigned_at : new Date(job.assigned_at).toLocaleDateString())
+          : '';
+
+        const inputId = `file_${job.id}`;
+        const hasEmployee = !!(job.employee && String(job.employee).trim().length);
+
+        card.innerHTML = `
+          <div class="photo-container">
+            <img
+              class="employee-photo"
+              src="${hasEmployee ? (job.employee_photo_url || PLACEHOLDER) : PLACEHOLDER}"
+              alt="Employee Photo"
+            />
+            <input 
+              type="file" 
+              id="${inputId}" 
+              class="photo-input" 
+              data-id="${job.id}" 
+              accept="image/*" 
+              style="display:none" 
+            />
+          </div>
+
+          <div class="card-body">
+            <div class="card-title">
+              <h3>${job.job_number || 'No Number'}</h3>
+              ${statusBadge}
+            </div>
+
+          <div class="card-meta">
+            <div class="meta-row"><strong>Title:</strong> ${job.title || ''}</div>
+            <div class="meta-row"><strong>Department:</strong> ${job.department || ''}</div>
+            <div class="meta-row"><strong>Filled Date:</strong> ${filledDateValue || '—'}</div>
+            ${job.assigned_at ? `<div class="meta-row"><strong>Assigned:</strong> ${assignedAt || job.assigned_at}</div>` : ''}
+            ${job.filled_date ? `<div class="meta-row"><strong>Filled:</strong> ${job.filled_date}</div>` : ''}
+            <div class="meta-row"><strong>Employee:</strong> ${job.employee || 'Unassigned'}</div>
+          </div>
+         </div>
+
+          <div class="card-actions">
+            ${isFilled(job)
+              ? `<button class="upload-btn" data-action="trigger-upload" data-input="${inputId}">Upload Photo</button>
+                 <button class="secondary" data-action="unassign" data-id="${job.id}">Unassign</button>`
+              : `<button class="secondary" data-action="assign" data-id="${job.id}">Assign</button>`
+            }
+            <button class="secondary" data-action="edit" data-id="${job.id}">Edit</button>
+            <button class="danger" data-action="delete" data-id="${job.id}">Delete</button>
+          </div>
+        `;
+
+        // Fallback if image fails to load
+        const img = card.querySelector('.photo-container img');
+        if (img) {
+          img.addEventListener('error', () => { img.src = PLACEHOLDER; });
+        }
+
+        jobGrid.appendChild(card);
+      });
+
+      updateTabCounts();
+    } catch (err) {
+      console.error('Render error:', err);
+      if (jobGrid) jobGrid.innerHTML = `<div style="color:#b91c1c">Error loading jobs. Check console.</div>`;
+    }
+  }
+
+  /* ------------ modal helpers ------------ */
+  function openModal(job = null) {
+    jobModal.classList.remove('hidden');
+    if (job) {
+      modalTitle.textContent = 'Edit Position';
+      document.getElementById('jobId').value = job.id;
+      document.getElementById('jobNumber').value = job.job_number || '';
+      document.getElementById('jobTitle').value = job.title || '';
+      document.getElementById('department').value = job.department || '';
+      document.getElementById('dueDate').value = fmtDate(job.due_date); // still uses the same field
+      document.getElementById('employee').value = job.employee || '';
+    } else {
+      modalTitle.textContent = 'Add Position';
+      jobForm.reset();
+      document.getElementById('jobId').value = '';
+    }
+  }
+  function closeModal() { jobModal.classList.add('hidden'); }
+
+  /* ------------ events ------------ */
+  document.querySelectorAll('.filters .tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filters .tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      // normalize to lower-case for internal logic & API
+      CURRENT_FILTER = String(btn.dataset.filter || 'all').toLowerCase();
+      loadJobs();
+    });
+  });
+
+  addJobBtn?.addEventListener('click', () => openModal());
+  cancelModal?.addEventListener('click', closeModal);
+  refreshBtn?.addEventListener('click', loadJobs);
+  search?.addEventListener('input', render);
+
+  // Create / Update
+  jobForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('jobId').value;
+    const payload = {
+      job_number: document.getElementById('jobNumber').value,
+      title: document.getElementById('jobTitle').value,
+      department: document.getElementById('department').value,
+      due_date: document.getElementById('dueDate').value // same field; UI label changed
+    };
+    if (id) {
+      await fetch(`${API}/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } else {
+      await fetch(`${API}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    }
+    closeModal();
+    loadJobs();
+  });
+
+  // Card button clicks
+  const jobGridClick = async (e) => {
+    const action = e.target.dataset.action;
+    if (!action) return;
+
+    if (action === 'trigger-upload') {
+      const input = document.getElementById(e.target.dataset.input);
+      if (input) input.click();
+      return;
+    }
+
+    const id = e.target.dataset.id;
+    if (!id) return;
+
+    if (action === 'edit') {
+      const job = ALL_JOBS.find(j => j.id == id);
+      openModal(job);
+
+    } else if (action === 'delete') {
+      await fetch(`${API}/${id}`, { method: 'DELETE' });
+      loadJobs();
+
+    } else if (action === 'assign') {
+      const name = prompt('Enter employee name:');
+      if (!name) return;
+      await fetch(`${API}/${id}/assign`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employee: name })
+      });
+      loadJobs();
+
+    } else if (action === 'unassign') {
+      await fetch(`${API}/${id}/unassign`, { method: 'POST' });
+      loadJobs();
+    }
+  };
+  jobGrid?.addEventListener('click', jobGridClick);
+
+  // File input change → upload → patch job
+  const jobGridChange = async (e) => {
+    if (!e.target.classList.contains('photo-input')) return;
+    const id = e.target.dataset.id;
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const fd = new FormData();
+    fd.append('photo', file);
+    const up = await fetch('/api/upload', { method: 'POST', body: fd });
+    if (!up.ok) { alert('Upload failed'); return; }
+    const { url } = await up.json();
+
+    await fetch(`${API}/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employee_photo_url: url })
+    });
+    loadJobs();
+  };
+  jobGrid?.addEventListener('change', jobGridChange);
+
+  /* init */
+  loadJobs();
+});
