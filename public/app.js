@@ -15,21 +15,38 @@ document.addEventListener('DOMContentLoaded', () => {
   const jobForm = document.getElementById('jobForm');
   const cancelModal = document.getElementById('cancelModal');
 
+  /* ====== STEP 2: Assign modal elements & helpers ====== */
+  const assignModal  = document.getElementById('assignModal');
+  const assignForm   = document.getElementById('assignForm');
+  const cancelAssign = document.getElementById('cancelAssign');
+  const assignInput  = document.getElementById('assignEmployeeName');
+
+  let ASSIGN_JOB_ID = null;
+
+  function openAssignModal(jobId){
+    ASSIGN_JOB_ID = jobId;
+    assignForm?.reset();
+    assignModal?.classList.remove('hidden');
+    setTimeout(() => assignInput?.focus(), 50);
+  }
+  function closeAssignModal(){
+    ASSIGN_JOB_ID = null;
+    assignModal?.classList.add('hidden');
+  }
+  /* ================================================ */
+
   /* Rename the modal label from "Due Date" -> "Filled Date" (UI only) */
   {
     const dueInput = document.getElementById('dueDate');
     if (dueInput) {
       const labelEl = dueInput.closest('label');
       if (labelEl) {
-        // If the first child is a text node ("Due Date"), replace it
         const firstNode = labelEl.childNodes[0];
         if (firstNode && firstNode.nodeType === Node.TEXT_NODE) {
           firstNode.textContent = 'Filled Date ';
         } else {
-          // Fallback: inject a text node at the start
           labelEl.insertBefore(document.createTextNode('Filled Date '), labelEl.firstChild);
         }
-        // optional: accessibility hint
         dueInput.setAttribute('aria-label', 'Filled Date');
       }
     }
@@ -46,14 +63,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const isFilled = (j) => !!j.employee || (j.status && j.status.toLowerCase() === 'filled');
 
-  // Find a tab by its data-filter value, case-insensitive
   function findTab(name) {
     const target = String(name || '').toLowerCase();
     return [...document.querySelectorAll('.filters .tab')]
       .find(t => (t.dataset.filter || '').toLowerCase() === target);
   }
 
-  // Update tab counts (All / Open / Filled)
   function updateTabCounts() {
     const allTab    = findTab('all');
     const openTab   = findTab('open');
@@ -89,7 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       ALL_JOBS = Array.isArray(data) ? data : (data.jobs || data.rows || []);
       console.log(`[debug] Loaded ${ALL_JOBS.length} jobs`, ALL_JOBS[0] || {});
-      updateTabCounts(); // refresh counts after loading
+      updateTabCounts();
       render();
     } catch (err) {
       console.error('Fetch /api/jobs threw:', err);
@@ -131,13 +146,11 @@ document.addEventListener('DOMContentLoaded', () => {
           ? `<span class="badge badge-filled">Filled</span>`
           : `<span class="badge badge-open">Open</span>`;
 
-        // Show only user-entered filled_date on the card
         const filledDateValue = job.filled_date
           ? (/^\d{4}-\d{2}-\d{2}$/.test(job.filled_date)
               ? job.filled_date
               : String(job.filled_date).split('T')[0])
           : '';
-
 
         const assignedAt = job.assigned_at
           ? (/^\d{4}-\d{2}-\d{2}$/.test(job.assigned_at) ? job.assigned_at : new Date(job.assigned_at).toLocaleDateString())
@@ -189,7 +202,6 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
         `;
 
-        // Fallback if image fails to load
         const img = card.querySelector('.photo-container img');
         if (img) {
           img.addEventListener('error', () => { img.src = PLACEHOLDER; });
@@ -215,7 +227,6 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('jobTitle').value = job.title || '';
       document.getElementById('department').value = job.department || '';
       document.getElementById('dueDate').value = fmtDate(job.filled_date);
-
       document.getElementById('employee').value = job.employee || '';
     } else {
       modalTitle.textContent = 'Add Position';
@@ -230,7 +241,6 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.filters .tab').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      // normalize to lower-case for internal logic & API
       CURRENT_FILTER = String(btn.dataset.filter || 'all').toLowerCase();
       loadJobs();
     });
@@ -238,7 +248,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   addJobBtn?.addEventListener('click', () => {
     openModal();
-    // 👇 Focus the Job Number field once the modal is visible
     setTimeout(() => {
       document.getElementById('jobNumber')?.focus();
     }, 50);
@@ -246,6 +255,24 @@ document.addEventListener('DOMContentLoaded', () => {
   cancelModal?.addEventListener('click', closeModal);
   refreshBtn?.addEventListener('click', loadJobs);
   search?.addEventListener('input', render);
+
+  // ====== STEP 3: Assign modal listeners ======
+  assignForm?.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const name = assignInput?.value?.trim();
+    if (!name || !ASSIGN_JOB_ID) return;
+
+    await fetch(`${API}/${ASSIGN_JOB_ID}/assign`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ employee: name })
+    });
+
+    closeAssignModal();
+    loadJobs();
+  });
+  cancelAssign?.addEventListener('click', closeAssignModal);
+  // ===========================================
 
   // Create / Update
   jobForm.addEventListener('submit', async (e) => {
@@ -256,8 +283,8 @@ document.addEventListener('DOMContentLoaded', () => {
       job_number: document.getElementById('jobNumber').value,
       title: document.getElementById('jobTitle').value,
       department: document.getElementById('department').value,
-      filled_date: rawDate ? rawDate : null,  // user-controlled filled date
-      due_date: null                          // ensure we don't use due_date anymore
+      filled_date: rawDate ? rawDate : null,
+      due_date: null
     };
 
     if (id) {
@@ -298,13 +325,9 @@ document.addEventListener('DOMContentLoaded', () => {
       loadJobs();
 
     } else if (action === 'assign') {
-      const name = prompt('Enter employee name:');
-      if (!name) return;
-      await fetch(`${API}/${id}/assign`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employee: name })
-      });
-      loadJobs();
+      /* ====== STEP 4: open the clean Assign modal instead of prompt() ====== */
+      openAssignModal(id);
+      /* ===================================================================== */
 
     } else if (action === 'unassign') {
       await fetch(`${API}/${id}/unassign`, { method: 'POST' });

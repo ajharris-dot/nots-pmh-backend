@@ -72,6 +72,23 @@
     </div>
   </div>
 
+  <!-- Assign Employee Modal -->
+<div id="assignModal" class="modal hidden">
+  <div class="modal-card">
+    <h2>Assign Employee</h2>
+    <form id="assignForm">
+      <label for="assignEmployeeName">Employee Name
+        <input type="text" id="assignEmployeeName" placeholder="Enter employee name" required />
+      </label>
+
+      <div class="modal-actions">
+        <button type="submit" class="primary">Assign</button>
+        <button type="button" id="cancelAssign" class="secondary">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
   <!-- Optional placeholder image used when no photo -->
   <!-- Put a real file named placeholder.png inside /public -->
   <script src="app.js"></script>
