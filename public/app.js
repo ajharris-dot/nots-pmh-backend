@@ -236,7 +236,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  addJobBtn?.addEventListener('click', () => openModal());
+  addJobBtn?.addEventListener('click', () => {
+    openModal();
+    // 👇 Focus the Job Number field once the modal is visible
+    setTimeout(() => {
+      document.getElementById('jobNumber')?.focus();
+    }, 50);
+  });
   cancelModal?.addEventListener('click', closeModal);
   refreshBtn?.addEventListener('click', loadJobs);
   search?.addEventListener('input', render);
