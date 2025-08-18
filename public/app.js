@@ -240,11 +240,12 @@ document.addEventListener('DOMContentLoaded', () => {
   jobForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const id = document.getElementById('jobId').value;
+    const rawDate = document.getElementById('dueDate').value;
     const payload = {
       job_number: document.getElementById('jobNumber').value,
       title: document.getElementById('jobTitle').value,
       department: document.getElementById('department').value,
-      due_date: document.getElementById('dueDate').value // same field; UI label changed
+      due_date: rawDate ? rawDate : null   // ← send null if blank
     };
     if (id) {
       await fetch(`${API}/${id}`, {

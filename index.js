@@ -82,7 +82,8 @@ app.get('/api/jobs', async (req, res) => {
         client AS department,
         assigned_to AS employee,
         employee_photo_url,
-        filled_date,
+        due_date,
+        filled_date,            -- ADDED: include filled_date in list responses
         status,
         created_at
       FROM jobs
@@ -114,7 +115,8 @@ app.get('/api/jobs/:id', async (req, res) => {
         client AS department,
         assigned_to AS employee,
         employee_photo_url,
-        filled_date,
+        due_date,
+        filled_date,            -- ADDED: include filled_date in single fetch
         status,
         created_at
       FROM jobs
@@ -129,18 +131,19 @@ app.get('/api/jobs/:id', async (req, res) => {
 });
 
 // CREATE (no assignment at create; starts Open unless provided)
+// Make date optional: accept blank/absent date; if provided, initialize filled_date to same date.
 app.post('/api/jobs', async (req, res) => {
-  const { title, job_number, department, filled_date, status } = req.body || {};
+  const { title, job_number, department, due_date, status } = req.body || {};
   try {
     const db = require('./models/db');
     const effectiveStatus = status || 'Open';
     const { rows } = await db.query(
-      `INSERT INTO jobs (title, description, client, filled_date, assigned_to, status)
-       VALUES ($1, $2, $3, $4, NULL, $5)
+      `INSERT INTO jobs (title, description, client, due_date, filled_date, assigned_to, status)
+       VALUES ($1, $2, $3, NULLIF($4,'')::date, NULLIF($4,'')::date, NULL, $5)   -- CHANGED: make optional & mirror if present
        RETURNING
          id, title, description AS job_number, client AS department,
-         assigned_to AS employee, employee_photo_url, filled_date, status, created_at`,
-      [title, job_number || null, department || null, filled_date || null, effectiveStatus]
+         assigned_to AS employee, employee_photo_url, due_date, filled_date, status, created_at`,
+      [title, job_number || null, department || null, due_date ?? null, effectiveStatus]
     );
     res.status(201).json(rows[0]);
   } catch (e) {
@@ -157,7 +160,7 @@ app.patch('/api/jobs/:id', async (req, res) => {
       title,
       job_number,
       department,
-      filled_date,
+      due_date,
       employee,
       status,
       employee_photo_url
@@ -167,7 +170,9 @@ app.patch('/api/jobs/:id', async (req, res) => {
       title,
       description: job_number,       // job_number -> description
       client: department,            // department -> client
-      filled_date,
+      due_date,                      // accepts null to clear
+      // (optional) keep filled_date aligned with due_date if provided:
+      ...(due_date !== undefined ? { filled_date: due_date } : {}),
       assigned_to: employee,         // employee -> assigned_to
       status,
       employee_photo_url             // allow updating photo URL
@@ -185,7 +190,7 @@ app.patch('/api/jobs/:id', async (req, res) => {
       `UPDATE jobs SET ${set.join(', ')} WHERE id = $${i}
        RETURNING
          id, title, description AS job_number, client AS department,
-         assigned_to AS employee, employee_photo_url, filled_date, status, created_at`,
+         assigned_to AS employee, employee_photo_url, due_date, filled_date, status, created_at`,
       vals
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
@@ -216,15 +221,18 @@ app.post('/api/jobs/:id/assign', async (req, res) => {
     const { employee } = req.body || {};
     if (!employee) return res.status(400).json({ error: 'employee required' });
 
-    const { rows } = await db.query(
-      `UPDATE jobs
-       SET assigned_to = $1, status = 'Filled'
-       WHERE id = $2
-       RETURNING
-         id, title, description AS job_number, client AS department,
-         assigned_to AS employee, employee_photo_url, filled_date, status, created_at`,
-      [employee, req.params.id]
-    );
+     const { rows } = await db.query(
+       `UPDATE jobs
+        SET assigned_to = $1,
+            status = 'Filled',
+            filled_date = COALESCE(filled_date, CURRENT_DATE)
+        WHERE id = $2
+        RETURNING
+          id, title, description AS job_number, client AS department,
+          assigned_to AS employee, employee_photo_url, due_date, filled_date, status, created_at`,
+       [employee, req.params.id]
+     );
+
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
   } catch (e) {
@@ -239,13 +247,16 @@ app.post('/api/jobs/:id/unassign', async (req, res) => {
     const db = require('./models/db');
     const { rows } = await db.query(
       `UPDATE jobs
-       SET assigned_to = NULL, status = 'Open'
+       SET assigned_to = NULL,
+           status = 'Open',
+           filled_date = NULL
        WHERE id = $1
        RETURNING
          id, title, description AS job_number, client AS department,
-         assigned_to AS employee, employee_photo_url, filled_date, status, created_at`,
+         assigned_to AS employee, employee_photo_url, due_date, filled_date, status, created_at`,
       [req.params.id]
     );
+
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
   } catch (e) {
