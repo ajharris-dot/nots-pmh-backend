@@ -21,11 +21,12 @@
         <button class="tab" data-filter="Open">Open</button>
         <button class="tab" data-filter="Filled">Filled</button>
       </div>
+      <button id="loginBtn" class="secondary">Log In</button>
+      <button id="logoutBtn" class="secondary" style="display:none">Log Out</button>
       <button id="refresh" class="secondary">Refresh</button>
       <button id="addJobBtn" class="primary">+ Add Position</button>
     </div>
   </header>
-
 
   <main class="content">
     <!-- Search -->
@@ -56,7 +57,8 @@
           <input type="text" id="department" required />
         </label>
 
-        <label>Due Date
+        <!-- Renamed from Due Date -> Filled Date -->
+        <label>Filled Date
           <input type="date" id="dueDate" />
         </label>
 
@@ -72,25 +74,42 @@
     </div>
   </div>
 
-  <!-- Assign Employee Modal -->
-<div id="assignModal" class="modal hidden">
-  <div class="modal-card">
-    <h2>Assign Employee</h2>
-    <form id="assignForm">
-      <label for="assignEmployeeName">Employee Name
-        <input type="text" id="assignEmployeeName" placeholder="Enter employee name" required />
-      </label>
-
-      <div class="modal-actions">
-        <button type="submit" class="primary">Assign</button>
-        <button type="button" id="cancelAssign" class="secondary">Cancel</button>
-      </div>
-    </form>
+  <!-- Login Modal -->
+  <div id="loginModal" class="modal hidden">
+    <div class="modal-card">
+      <h2>Log In</h2>
+      <form id="loginForm">
+        <label>Email
+          <input type="email" id="loginEmail" required />
+        </label>
+        <label>Password
+          <input type="password" id="loginPassword" required />
+        </label>
+        <div class="modal-actions">
+          <button type="submit" class="primary">Log In</button>
+          <button type="button" id="cancelLogin" class="secondary">Cancel</button>
+        </div>
+      </form>
+    </div>
   </div>
-</div>
 
-  <!-- Optional placeholder image used when no photo -->
-  <!-- Put a real file named placeholder.png inside /public -->
+  <!-- Assign Employee Modal -->
+  <div id="assignModal" class="modal hidden">
+    <div class="modal-card">
+      <h2>Assign Employee</h2>
+      <form id="assignForm">
+        <label for="assignEmployeeName">Employee Name
+          <input type="text" id="assignEmployeeName" placeholder="Enter employee name" required />
+        </label>
+
+        <div class="modal-actions">
+          <button type="submit" class="primary">Assign</button>
+          <button type="button" id="cancelAssign" class="secondary">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>

@@ -48,7 +48,6 @@ html,body{ margin:0; padding:0; font-family:system-ui,-apple-system,Segoe UI,Rob
   justify-self: end;
 }
 
-
 /* Buttons */
 button{ cursor:pointer; border-radius:8px; padding:8px 12px; border:1px solid transparent; font-weight:600; }
 .primary{ background:var(--accent); color:#fff; }
@@ -57,6 +56,12 @@ button{ cursor:pointer; border-radius:8px; padding:8px 12px; border:1px solid tr
 .secondary:hover{ background:#fafafa; }
 .danger{ background:var(--danger); color:#fff; }
 .danger:hover{ filter:brightness(0.95); }
+
+/* Disabled state for auth-gated actions */
+button:disabled{
+  opacity:0.55;
+  cursor:not-allowed;
+}
 
 /* Filters */
 .filters{ display:flex; gap:6px; }
@@ -67,11 +72,10 @@ button{ cursor:pointer; border-radius:8px; padding:8px 12px; border:1px solid tr
 
 /* Main wrapper */
 .content{
-  max-width: none;   /* remove the 1200px cap so the grid can span the full window */
+  max-width: none;   /* allow grid to span full window */
   margin:18px auto;
   padding:0 16px;
 }
-
 
 /* Search bar */
 .toolbar{ margin-bottom:12px; }
@@ -126,6 +130,11 @@ button{ cursor:pointer; border-radius:8px; padding:8px 12px; border:1px solid tr
   flex-wrap:wrap;
 }
 
+/* Optional: the "Log in to manage" placeholder button style (already uses .secondary) */
+.card-actions .login-gate-btn{
+  font-weight:600;
+}
+
 /* Upload button (only renders on Filled cards in JS) */
 .upload-btn{
   background:var(--accent); color:#fff; border:none; padding:8px 10px; border-radius:8px;
@@ -144,11 +153,13 @@ button{ cursor:pointer; border-radius:8px; padding:8px 12px; border:1px solid tr
 }
 .modal-card h2{ margin:0 0 12px 0; }
 
-#jobForm label{ display:block; font-weight:600; margin:10px 0 4px 0; }
-#jobForm input{
+/* Generalized modal form styles so ALL modals (job, login, assign) match */
+.modal-card label{ display:block; font-weight:600; margin:10px 0 4px 0; }
+.modal-card input{
   width:100%; border:1px solid var(--line); border-radius:8px; padding:10px 12px; outline:none;
 }
 .modal-actions{ display:flex; gap:10px; margin-top:14px; justify-content:flex-end; }
+
 /* ============================
    Job Card Photo Styling
    ============================ */
@@ -166,15 +177,15 @@ button{ cursor:pointer; border-radius:8px; padding:8px 12px; border:1px solid tr
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: contain;   /* ✅ Fits whole image, no cropping */
+  object-fit: contain;   /* Fits whole image, no cropping */
   object-position: center; /* Center the image in the box */
   display: block;
   background: #f6f6f6;   /* optional: neutral backdrop for empty space */
 }
+
 /* Slightly larger filter tabs for label + count */
 .filters .tab {
   padding: 8px 14px;
   font-size: 14px;
   line-height: 1.1;
 }
-

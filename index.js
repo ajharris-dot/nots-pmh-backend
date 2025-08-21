@@ -5,6 +5,12 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 
+// NEW: auth/session deps
+const session = require('express-session');
+const PgSession = require('connect-pg-simple')(session);
+const bcrypt = require('bcrypt');
+const helmet = require('helmet'); // ← added
+
 const app = express();
 
 /* ---------- Uploads setup (kept local for now) ---------- */
@@ -22,9 +28,46 @@ const upload = multer({ storage });
 
 /* ---------- App middleware ---------- */
 app.set('trust proxy', 1);
-app.use(cors());
+app.use(helmet()); // ← added security headers
+
+// ⚠️ Enable credentials so browser can send/receive the session cookie
+app.use(cors({
+  origin: true,        // reflect the request origin (adjust to a specific URL if you prefer)
+  credentials: true    // allow cookies/credentials
+}));
+
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// NEW: sessions (Postgres-backed)
+const pgConnStr =
+  process.env.DATABASE_URL ||
+  (process.env.DB_USER
+    ? `postgresql://${process.env.DB_USER}:${encodeURIComponent(process.env.DB_PASSWORD || '')}@${process.env.DB_HOST}:${process.env.DB_PORT || 5432}/${process.env.DB_NAME}`
+    : null);
+
+app.use(
+  session({
+    store: new PgSession({
+      conString: pgConnStr,
+      tableName: 'session', // you created this earlier
+    }),
+    secret: process.env.SESSION_SECRET || 'dev-secret-change-me',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+    },
+  })
+);
+
+// NEW: small helper to require login on write routes
+function requireAuth(req, res, next) {
+  if (req.session && req.session.user) return next();
+  return res.status(401).json({ error: 'unauthenticated' });
+}
 
 /* ---------- Health + root ---------- */
 app.get('/healthz', (_req, res) => res.status(200).json({ ok: true }));
@@ -37,7 +80,8 @@ app.get('/debug/env', (_req, res) => {
     DB_HOST: !!process.env.DB_HOST,
     DB_NAME: !!process.env.DB_NAME,
     DB_PASSWORD: !!process.env.DB_PASSWORD,
-    DB_PORT: process.env.DB_PORT || null
+    DB_PORT: process.env.DB_PORT || null,
+    SESSION_SECRET: !!process.env.SESSION_SECRET,
   });
 });
 
@@ -52,9 +96,76 @@ app.get('/debug/db', async (_req, res) => {
   }
 });
 
+/* =========================
+   Auth API
+   ========================= */
+// POST /api/auth/register {email, password, name?, role?}
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const db = require('./models/db');
+    const { email, password, name, role } = req.body || {};
+    if (!email || !password) return res.status(400).json({ error: 'email and password required' });
+
+    const exists = await db.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (exists.rows.length) return res.status(409).json({ error: 'email already registered' });
+
+    const hash = await bcrypt.hash(password, 10);
+    const { rows } = await db.query(
+      `INSERT INTO users (email, password_hash, name, role)
+       VALUES ($1, $2, $3, COALESCE($4,'user'))
+       RETURNING id, email, name, role`,
+      [email, hash, name || null, role || null]
+    );
+    const user = rows[0];
+    req.session.user = user;
+    res.status(201).json({ ok: true, user });
+  } catch (e) {
+    console.error('register error:', e);
+    res.status(500).json({ error: 'server error' });
+  }
+});
+
+// POST /api/auth/login {email, password}
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const db = require('./models/db');
+    const { email, password } = req.body || {};
+    if (!email || !password) return res.status(400).json({ error: 'email and password required' });
+
+    const { rows } = await db.query('SELECT id, email, name, role, password_hash FROM users WHERE email = $1', [email]);
+    if (!rows.length) return res.status(401).json({ error: 'invalid credentials' });
+
+    const u = rows[0];
+    const ok = await bcrypt.compare(password, u.password_hash);
+    if (!ok) return res.status(401).json({ error: 'invalid credentials' });
+
+    const user = { id: u.id, email: u.email, name: u.name, role: u.role };
+    req.session.user = user;
+    res.json({ ok: true, user });
+  } catch (e) {
+    console.error('login error:', e);
+    res.status(500).json({ error: 'server error' });
+  }
+});
+
+// POST /api/auth/logout
+app.post('/api/auth/logout', (req, res) => {
+  req.session?.destroy(() => {
+    res.clearCookie('sid');
+    res.json({ ok: true });
+  });
+});
+
+// GET /api/auth/me
+app.get('/api/auth/me', (req, res) => {
+  if (req.session && req.session.user) return res.json({ authenticated: true, user: req.session.user });
+  return res.json({ authenticated: false, user: null });
+});
+
 /* ---------- Upload endpoint (returns { url }) ---------- */
 // multipart/form-data; field name: "photo"
-app.post('/api/upload', upload.single('photo'), (req, res) => {
+// PROTECTED: must be logged in
+app.post('/api/upload', requireAuth, upload.single('photo'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   const url = `/uploads/${req.file.filename}`;
   res.json({ url });
@@ -107,7 +218,8 @@ app.get('/api/jobs', async (req, res) => {
 app.get('/api/jobs/:id', async (req, res) => {
   try {
     const db = require('./models/db');
-    const { rows } = await db.query(`
+    const { rows } = await db.query(
+      `
       SELECT
         id,
         title,
@@ -121,7 +233,9 @@ app.get('/api/jobs/:id', async (req, res) => {
         created_at
       FROM jobs
       WHERE id = $1
-    `, [req.params.id]);
+    `,
+      [req.params.id]
+    );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
   } catch (e) {
@@ -132,7 +246,8 @@ app.get('/api/jobs/:id', async (req, res) => {
 
 // CREATE (no assignment at create; starts Open unless provided)
 // Make date optional: accept blank/absent date; if provided, initialize filled_date to same date.
-app.post('/api/jobs', async (req, res) => {
+// PROTECTED
+app.post('/api/jobs', requireAuth, async (req, res) => {
   const { title, job_number, department, due_date, status, filled_date } = req.body || {};
   try {
     const db = require('./models/db');
@@ -153,7 +268,8 @@ app.post('/api/jobs', async (req, res) => {
 });
 
 // UPDATE (partial) — maps new names to DB columns
-app.patch('/api/jobs/:id', async (req, res) => {
+// PROTECTED
+app.patch('/api/jobs/:id', requireAuth, async (req, res) => {
   try {
     const db = require('./models/db');
     const {
@@ -161,27 +277,31 @@ app.patch('/api/jobs/:id', async (req, res) => {
       job_number,
       department,
       due_date,
-      filled_date,             // keep this; no mirroring
+      filled_date, // keep this; no mirroring
       employee,
       status,
-      employee_photo_url
+      employee_photo_url,
     } = req.body || {};
 
     const fields = {
       title,
-      description: job_number,       // job_number -> description
-      client: department,            // department -> client
-      due_date,                      // independent; may be unused by UI
-      filled_date,                   // user-controlled; do not mirror from due_date
-      assigned_to: employee,         // employee -> assigned_to
+      description: job_number, // job_number -> description
+      client: department, // department -> client
+      due_date, // independent; may be unused by UI
+      filled_date, // user-controlled; do not mirror from due_date
+      assigned_to: employee, // employee -> assigned_to
       status,
-      employee_photo_url             // allow updating photo URL
+      employee_photo_url, // allow updating photo URL
     };
 
-    const set = [], vals = [];
+    const set = [];
+    const vals = [];
     let i = 1;
     for (const [k, v] of Object.entries(fields)) {
-      if (v !== undefined) { set.push(`${k} = $${i++}`); vals.push(v); }
+      if (v !== undefined) {
+        set.push(`${k} = $${i++}`);
+        vals.push(v);
+      }
     }
     if (!set.length) return res.status(400).json({ error: 'No fields provided' });
     vals.push(req.params.id);
@@ -202,7 +322,8 @@ app.patch('/api/jobs/:id', async (req, res) => {
 });
 
 // DELETE
-app.delete('/api/jobs/:id', async (req, res) => {
+// PROTECTED
+app.delete('/api/jobs/:id', requireAuth, async (req, res) => {
   try {
     const db = require('./models/db');
     const { rowCount } = await db.query('DELETE FROM jobs WHERE id = $1', [req.params.id]);
@@ -215,7 +336,8 @@ app.delete('/api/jobs/:id', async (req, res) => {
 });
 
 // ASSIGN (expects { employee }, sets status = Filled)
-app.post('/api/jobs/:id/assign', async (req, res) => {
+// PROTECTED
+app.post('/api/jobs/:id/assign', requireAuth, async (req, res) => {
   try {
     const db = require('./models/db');
     const { employee } = req.body || {};
@@ -242,7 +364,8 @@ app.post('/api/jobs/:id/assign', async (req, res) => {
 });
 
 // UNASSIGN (sets employee NULL, status = Open)
-app.post('/api/jobs/:id/unassign', async (req, res) => {
+// PROTECTED
+app.post('/api/jobs/:id/unassign', requireAuth, async (req, res) => {
   try {
     const db = require('./models/db');
     const { rows } = await db.query(

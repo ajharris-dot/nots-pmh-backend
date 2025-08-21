@@ -1,101 +1,275 @@
+// routes/jobRoutes.js
 const express = require('express');
 const router = express.Router();
 const db = require('../models/db');
+const authMiddleware = require('../middleware/authMiddleware'); // ✅ add this
 
-// GET all jobs (supports optional ?status= filter)
+/**
+ * GET /api/jobs
+ * Optional query params:
+ *   - status=Open|Filled|...(case-insensitive)
+ *   - limit (default 10000, max 20000)
+ *   - offset (default 0)
+ *
+ * NOTE: We return aliased fields to match the frontend:
+ *   description -> job_number
+ *   client      -> department
+ *   assigned_to -> employee
+ */
 router.get('/', async (req, res) => {
   try {
-    const status = req.query.status && String(req.query.status).trim();
-    const queryBase = `
-      SELECT *,
-             assigned_to AS employee,
-             TO_CHAR(assigned_at, 'YYYY-MM-DD') AS assigned_at,   -- added
-             TO_CHAR(filled_date, 'YYYY-MM-DD')  AS filled_date
-        FROM jobs
+    const limit = Math.min(parseInt(req.query.limit || '10000', 10), 20000);
+    const offset = Math.max(parseInt(req.query.offset || '0', 10), 0);
+    const status = req.query.status;
+
+    const params = [];
+    let q = `
+      SELECT
+        id,
+        title,
+        description AS job_number,
+        client      AS department,
+        assigned_to AS employee,
+        employee_photo_url,
+        due_date,
+        filled_date,
+        status,
+        created_at
+      FROM jobs
     `;
-    
-    if (status) {
-      const { rows } = await db.query(
-        `${queryBase} WHERE LOWER(status) = LOWER($1) ORDER BY created_at DESC`,
-        [status]
-      );
-      return res.json(rows);
+
+    if (status && String(status).toLowerCase() !== 'all') {
+      q += ` WHERE LOWER(status) = LOWER($1)`;
+      params.push(status);
     }
 
-    const { rows } = await db.query(`${queryBase} ORDER BY created_at DESC`);
+    q += ` ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(limit, offset);
+
+    const { rows } = await db.query(q, params);
     res.json(rows);
-  } catch (err) {
-    console.error('GET /api/jobs error:', err);
-    res.status(500).json({ error: err.message });
+  } catch (e) {
+    console.error('GET /api/jobs failed:', e);
+    res.status(500).json({ error: 'DB error' });
   }
 });
 
-// POST a new job (set assigned_at if assigned_to provided)
-router.post('/', async (req, res) => {
-  const { title, description, client, filled_date, assigned_to, status } = req.body;
+/**
+ * GET /api/jobs/:id
+ */
+router.get('/:id', async (req, res) => {
   try {
     const { rows } = await db.query(
-      `INSERT INTO jobs
-         (title, description, client, filled_date, assigned_to, status, assigned_at)
-       VALUES
-         ($1, $2, $3, $4, $5, COALESCE($6, 'Open'),
-          CASE WHEN $5 IS NOT NULL AND $5 <> '' THEN NOW() ELSE NULL END)
-       RETURNING *`,
-      [title, description, client, filled_date, assigned_to || null, status]
+      `
+      SELECT
+        id,
+        title,
+        description AS job_number,
+        client      AS department,
+        assigned_to AS employee,
+        employee_photo_url,
+        due_date,
+        filled_date,
+        status,
+        created_at
+      FROM jobs
+      WHERE id = $1
+      `,
+      [req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (e) {
+    console.error('GET /api/jobs/:id failed:', e);
+    res.status(500).json({ error: 'DB error' });
+  }
+});
+
+/**
+ * POST /api/jobs
+ * Body: { title, job_number, department, filled_date?, status? }
+ * (We still accept due_date for compatibility; your UI sends null.)
+ * 🔒 Protected
+ */
+router.post('/', authMiddleware, async (req, res) => {
+  const { title, job_number, department, due_date, status, filled_date } = req.body || {};
+  try {
+    const effectiveStatus = status || 'Open';
+    const { rows } = await db.query(
+      `INSERT INTO jobs (title, description, client, due_date, filled_date, assigned_to, status)
+       VALUES ($1, $2, $3, NULLIF($4,'')::date, NULLIF($5,'')::date, NULL, $6)
+       RETURNING
+         id,
+         title,
+         description AS job_number,
+         client      AS department,
+         assigned_to AS employee,
+         employee_photo_url,
+         due_date,
+         filled_date,
+         status,
+         created_at`,
+      [title, job_number || null, department || null, due_date ?? null, filled_date ?? null, effectiveStatus]
     );
     res.status(201).json(rows[0]);
-  } catch (err) {
-    console.error('POST /api/jobs error:', err);
-    res.status(500).json({ error: err.message });
+  } catch (e) {
+    console.error('POST /api/jobs failed:', e);
+    res.status(500).json({ error: 'DB error' });
   }
 });
 
-// ASSIGN — sets assignee, marks filled, stamps assigned_at
-router.post('/:id/assign', async (req, res) => {
-  const { id } = req.params;
-  const { employee, assigned_to } = req.body;
-  const assignee = (assigned_to ?? employee ?? '').trim();
-  if (!assignee) return res.status(400).json({ error: 'Employee required' });
-
+/**
+ * PATCH /api/jobs/:id
+ * Partial update; same aliases as above.
+ * 🔒 Protected
+ */
+router.patch('/:id', authMiddleware, async (req, res) => {
   try {
+    const {
+      title,
+      job_number,
+      department,
+      due_date,
+      filled_date,
+      employee,
+      status,
+      employee_photo_url,
+    } = req.body || {};
+
+    const fields = {
+      title,
+      description: job_number,  // job_number -> description
+      client: department,       // department -> client
+      due_date,
+      filled_date,              // user-controlled
+      assigned_to: employee,    // employee -> assigned_to
+      status,
+      employee_photo_url,
+    };
+
+    const set = [];
+    const vals = [];
+    let i = 1;
+    for (const [col, val] of Object.entries(fields)) {
+      if (val !== undefined) {
+        set.push(`${col} = $${i++}`);
+        vals.push(val);
+      }
+    }
+
+    if (!set.length) return res.status(400).json({ error: 'No fields provided' });
+    vals.push(req.params.id);
+
     const { rows } = await db.query(
-      `UPDATE jobs
-          SET assigned_to = $1,
-              status = 'filled',
-              assigned_at = NOW(),
-              updated_at = NOW()
-        WHERE id = $2
-        RETURNING *`,
-      [assignee, id]
+      `UPDATE jobs SET ${set.join(', ')} WHERE id = $${i}
+       RETURNING
+         id,
+         title,
+         description AS job_number,
+         client      AS department,
+         assigned_to AS employee,
+         employee_photo_url,
+         due_date,
+         filled_date,
+         status,
+         created_at`,
+      vals
     );
-    if (!rows.length) return res.status(404).json({ error: 'Job not found' });
+
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
-  } catch (err) {
-    console.error('ASSIGN error:', err);
-    res.status(500).json({ error: 'Failed to assign job' });
+  } catch (e) {
+    console.error('PATCH /api/jobs/:id failed:', e);
+    res.status(500).json({ error: 'DB error' });
   }
 });
 
-// UNASSIGN — clears assignee, photo, and assigned_at; marks open
-router.post('/:id/unassign', async (req, res) => {
-  const { id } = req.params;
+/**
+ * DELETE /api/jobs/:id
+ * 🔒 Protected
+ */
+router.delete('/:id', authMiddleware, async (req, res) => {
+  try {
+    const { rowCount } = await db.query('DELETE FROM jobs WHERE id = $1', [req.params.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Not found' });
+    res.status(204).send();
+  } catch (e) {
+    console.error('DELETE /api/jobs/:id failed:', e);
+    res.status(500).json({ error: 'DB error' });
+  }
+});
+
+/**
+ * POST /api/jobs/:id/assign
+ * Body: { employee }
+ * Sets status = 'Filled' and sets filled_date only if currently NULL.
+ * 🔒 Protected
+ */
+router.post('/:id/assign', authMiddleware, async (req, res) => {
+  try {
+    const { employee } = req.body || {};
+    if (!employee) return res.status(400).json({ error: 'employee required' });
+
+    const { rows } = await db.query(
+      `UPDATE jobs
+         SET assigned_to = $1,
+             status = 'Filled',
+             filled_date = COALESCE(filled_date, CURRENT_DATE)
+       WHERE id = $2
+       RETURNING
+         id,
+         title,
+         description AS job_number,
+         client      AS department,
+         assigned_to AS employee,
+         employee_photo_url,
+         due_date,
+         filled_date,
+         status,
+         created_at`,
+      [employee, req.params.id]
+    );
+
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (e) {
+    console.error('POST /api/jobs/:id/assign failed:', e);
+    res.status(500).json({ error: 'DB error' });
+  }
+});
+
+/**
+ * POST /api/jobs/:id/unassign
+ * Clears employee and filled_date; sets status Open.
+ * 🔒 Protected
+ */
+router.post('/:id/unassign', authMiddleware, async (req, res) => {
   try {
     const { rows } = await db.query(
       `UPDATE jobs
-          SET assigned_to = NULL,
-              employee_photo_url = NULL,
-              assigned_at = NULL,
-              status = 'open',
-              updated_at = NOW()
-        WHERE id = $1
-        RETURNING *`,
-      [id]
+         SET assigned_to = NULL,
+             status      = 'Open',
+             filled_date = NULL
+       WHERE id = $1
+       RETURNING
+         id,
+         title,
+         description AS job_number,
+         client      AS department,
+         assigned_to AS employee,
+         employee_photo_url,
+         due_date,
+         filled_date,
+         status,
+         created_at`,
+      [req.params.id]
     );
-    if (!rows.length) return res.status(404).json({ error: 'Job not found' });
+
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
-  } catch (err) {
-    console.error('UNASSIGN error:', err);
-    res.status(500).json({ error: 'Failed to unassign job' });
+  } catch (e) {
+    console.error('POST /api/jobs/:id/unassign failed:', e);
+    res.status(500).json({ error: 'DB error' });
   }
 });
 

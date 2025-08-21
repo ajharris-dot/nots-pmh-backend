@@ -1,14 +1,25 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
-const jobRoutes = require('./routes/jobRoutes');
+
+const { publicRouter: jobPublic, protectedRouter: jobProtected } = require('./routes/jobRoutes');
+const authRoutes = require('./routes/authRoutes');
+const authMiddleware = require('./middleware/authMiddleware');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
-app.use('/api/jobs', jobRoutes);
+
+// Auth endpoints
+app.use('/api/auth', authRoutes);
+
+// Public job endpoints (GETs)
+app.use('/api/jobs', jobPublic);
+
+// Protected job endpoints (POST, PATCH, DELETE, assign/unassign)
+app.use('/api/jobs', authMiddleware, jobProtected);
 
 app.get('/', (req, res) => {
   res.send('NOTS PMH API is running.');
