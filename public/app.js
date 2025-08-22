@@ -5,7 +5,7 @@ fetch('/api/jobs').then(r=>r.text()).then(t=>console.log('/api/jobs sample:', t.
 const API = '/api/jobs';
 const AUTH = '/api/auth';
 const USERS = '/api/users';
-const PLACEHOLDER = './placeholder-v2.png?v=20250814'; // cache-busted placeholder
+const PLACEHOLDER = './placeholder-v2.png?v=20250814';
 const TOKEN_KEY = 'authToken';
 
 let ALL_JOBS = [];
@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const userRoleEl = document.getElementById('userRole');
   const userPasswordEl = document.getElementById('userPassword');
 
-  /* ====== Assign modal elements & helpers ====== */
+  /* ====== Assign modal ====== */
   const assignModal  = document.getElementById('assignModal');
   const assignForm   = document.getElementById('assignForm');
   const cancelAssign = document.getElementById('cancelAssign');
@@ -60,32 +60,13 @@ document.addEventListener('DOMContentLoaded', () => {
     ASSIGN_JOB_ID = null;
     assignModal?.classList.add('hidden');
   }
-  /* ============================================ */
 
-  /* Rename the modal label from "Due Date" -> "Filled Date" (UI only) */
-  {
-    const dueInput = document.getElementById('dueDate');
-    if (dueInput) {
-      const labelEl = dueInput.closest('label');
-      if (labelEl) {
-        const firstNode = labelEl.childNodes[0];
-        if (firstNode && firstNode.nodeType === Node.TEXT_NODE) {
-          firstNode.textContent = 'Filled Date ';
-        } else {
-          labelEl.insertBefore(document.createTextNode('Filled Date '), labelEl.firstChild);
-        }
-        dueInput.setAttribute('aria-label', 'Filled Date');
-      }
-    }
-  }
-
-  /* ------------------ auth helpers ------------------ */
+  /* ------- Auth helpers ------- */
   const getToken = () => localStorage.getItem(TOKEN_KEY) || '';
   const setToken = (t) => localStorage.setItem(TOKEN_KEY, t);
   const clearToken = () => localStorage.removeItem(TOKEN_KEY);
   const isAuthed = () => !!getToken();
 
-  // Wrapper that injects Authorization header for protected routes
   async function authFetch(url, options = {}) {
     const token = getToken();
     const headers = new Headers(options.headers || {});
@@ -105,6 +86,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  /* ------- Role rules (UI + client guard) ------- */
+  function can(action) {
+    const role = CURRENT_USER?.role;
+    if (!role) return false;
+    if (role === 'admin') return true;
+
+    const EMPLOYMENT = ['assign', 'unassign', 'upload_photo'];
+    const OPERATIONS = ['create_job', 'edit_job', 'delete_job'];
+    if (role === 'employment') return EMPLOYMENT.includes(action);
+    if (role === 'operations') return OPERATIONS.includes(action);
+    // managers/users = view-only
+    return false;
+  }
+
   function openLoginModal(){
     loginForm?.reset();
     loginModal?.classList.remove('hidden');
@@ -115,28 +110,38 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function updateUIAuth() {
-    // Show/hide header buttons
-    if (isAuthed()) {
+    const authed = isAuthed();
+
+    // header auth buttons
+    if (authed) {
       loginBtn?.setAttribute('style', 'display:none');
       logoutBtn?.setAttribute('style', '');
-      addJobBtn?.removeAttribute('disabled');
     } else {
       loginBtn?.setAttribute('style', '');
       logoutBtn?.setAttribute('style', 'display:none');
-      addJobBtn?.setAttribute('disabled', 'disabled');
     }
 
-    // Admin-only "Manage Users" button
-    if (CURRENT_USER?.role === 'admin') {
+    // Add Position button only for roles that can create
+    if (authed && can('create_job')) {
+      addJobBtn?.removeAttribute('disabled');
+      addJobBtn?.setAttribute('style', '');
+    } else {
+      addJobBtn?.setAttribute('disabled', 'disabled');
+      // hide entirely so it cannot be clicked
+      addJobBtn?.setAttribute('style', 'display:none');
+    }
+
+    // Admin-only Manage Users button
+    if (authed && CURRENT_USER?.role === 'admin') {
       manageUsersBtn?.setAttribute('style', '');
     } else {
       manageUsersBtn?.setAttribute('style', 'display:none');
     }
 
-    render();
+    render(); // re-render cards so per-card actions match permissions
   }
 
-  /* ------------ helpers ------------ */
+  /* ------- helpers ------- */
   const fmtDate = (d) => {
     if (!d) return '';
     const s = String(d);
@@ -144,7 +149,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const [y, m, day] = only.split('-');
     return (y && m && day) ? `${y}-${m}-${day}` : only;
   };
-
   const isFilled = (j) => !!j.employee || (j.status && j.status.toLowerCase() === 'filled');
 
   function findTab(name) {
@@ -153,7 +157,6 @@ document.addEventListener('DOMContentLoaded', () => {
       .find(t => (t.dataset.filter || '').toLowerCase() === target);
   }
 
-  /* === counts reflect search results === */
   function updateTabCounts(baseList = ALL_JOBS) {
     const allTab    = findTab('all');
     const openTab   = findTab('open');
@@ -169,46 +172,43 @@ document.addEventListener('DOMContentLoaded', () => {
     filledTab.textContent = `Filled (${filledCount})`;
   }
 
-  /* ------------ data ------------ */
+  /* ------- data ------- */
   async function loadJobs() {
-  try {
-    const params = new URLSearchParams({ limit: '20000', offset: '0' });
-    if (String(CURRENT_FILTER || 'all').toLowerCase() !== 'all') {
-      params.set('status', String(CURRENT_FILTER).toLowerCase());
-    }
-
-    const res = await fetch(`${API}?${params.toString()}`);
-    if (!res.ok) {
-      const msg = await res.text().catch(()=> '');
-      console.error('Failed to fetch jobs:', res.status, msg);
+    try {
+      const params = new URLSearchParams({ limit: '20000', offset: '0' });
+      if (String(CURRENT_FILTER || 'all').toLowerCase() !== 'all') {
+        params.set('status', String(CURRENT_FILTER).toLowerCase());
+      }
+      const res = await fetch(`${API}?${params.toString()}`);
+      if (!res.ok) {
+        const msg = await res.text().catch(()=> '');
+        console.error('Failed to fetch jobs:', res.status, msg);
+        if (jobGrid) {
+          jobGrid.innerHTML = `<div style="color:#b91c1c">
+            Error loading jobs (HTTP ${res.status}). ${msg || 'See console for details.'}
+          </div>`;
+        }
+        ALL_JOBS = [];
+        updateTabCounts();
+        return;
+      }
+      const data = await res.json();
+      ALL_JOBS = Array.isArray(data) ? data : (data.jobs || data.rows || []);
+      updateTabCounts();
+      render();
+    } catch (err) {
+      console.error('Fetch /api/jobs threw:', err);
       if (jobGrid) {
         jobGrid.innerHTML = `<div style="color:#b91c1c">
-          Error loading jobs (HTTP ${res.status}). ${msg || 'See console for details.'}
+          Error loading jobs (network/JS). See console for details.
         </div>`;
       }
       ALL_JOBS = [];
       updateTabCounts();
-      return;
     }
-
-    const data = await res.json();
-    ALL_JOBS = Array.isArray(data) ? data : (data.jobs || data.rows || []);
-    updateTabCounts();
-    render();
-  } catch (err) {
-    console.error('Fetch /api/jobs threw:', err);
-    if (jobGrid) {
-      jobGrid.innerHTML = `<div style="color:#b91c1c">
-        Error loading jobs (network/JS). See console for details.
-      </div>`;
-    }
-    ALL_JOBS = [];
-    updateTabCounts();
   }
-}
 
-
-  /* ------------ UI render ------------ */
+  /* ------- UI render ------- */
   function render() {
     try {
       const q = (search?.value || '').trim().toLowerCase();
@@ -226,7 +226,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return statusOk;
       });
 
-      // Update counts based on search results
       updateTabCounts(baseSearch);
 
       if (!filtered.length) {
@@ -257,19 +256,27 @@ document.addEventListener('DOMContentLoaded', () => {
         const inputId = `file_${job.id}`;
         const hasEmployee = !!(job.employee && String(job.employee).trim().length);
 
-        const actionsHtml = authed
-          ? `
-            ${isFilled(job)
-              ? `<button class="upload-btn" data-action="trigger-upload" data-input="${inputId}">Upload Photo</button>
-                 <button class="secondary" data-action="unassign" data-id="${job.id}">Unassign</button>`
-              : `<button class="secondary" data-action="assign" data-id="${job.id}">Assign</button>`
-            }
-            <button class="secondary" data-action="edit" data-id="${job.id}">Edit</button>
-            <button class="danger" data-action="delete" data-id="${job.id}">Delete</button>
-          `
-          : `
-            <button class="secondary login-gate-btn" data-action="open-login">Log in to manage</button>
-          `;
+        // Build actions based on permissions
+        let actions = '';
+        if (!authed) {
+          actions = `<button class="secondary login-gate-btn" data-action="open-login">Log in to manage</button>`;
+        } else {
+          if (isFilled(job) && can('upload_photo')) {
+            actions += `<button class="upload-btn" data-action="trigger-upload" data-input="${inputId}">Upload Photo</button>`;
+          }
+          if (isFilled(job) && can('unassign')) {
+            actions += `<button class="secondary" data-action="unassign" data-id="${job.id}">Unassign</button>`;
+          }
+          if (!isFilled(job) && can('assign')) {
+            actions += `<button class="secondary" data-action="assign" data-id="${job.id}">Assign</button>`;
+          }
+          if (can('edit_job')) {
+            actions += `<button class="secondary" data-action="edit" data-id="${job.id}">Edit</button>`;
+          }
+          if (can('delete_job')) {
+            actions += `<button class="danger" data-action="delete" data-id="${job.id}">Delete</button>`;
+          }
+        }
 
         card.innerHTML = `
           <div class="photo-container">
@@ -278,14 +285,7 @@ document.addEventListener('DOMContentLoaded', () => {
               src="${hasEmployee ? (job.employee_photo_url || PLACEHOLDER) : PLACEHOLDER}"
               alt="Employee Photo"
             />
-            <input 
-              type="file" 
-              id="${inputId}" 
-              class="photo-input" 
-              data-id="${job.id}" 
-              accept="image/*" 
-              style="display:none" 
-            />
+            <input type="file" id="${inputId}" class="photo-input" data-id="${job.id}" accept="image/*" style="display:none" />
           </div>
 
           <div class="card-body">
@@ -303,15 +303,11 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
           </div>
 
-          <div class="card-actions">
-            ${actionsHtml}
-          </div>
+          <div class="card-actions">${actions}</div>
         `;
 
         const img = card.querySelector('.photo-container img');
-        if (img) {
-          img.addEventListener('error', () => { img.src = PLACEHOLDER; });
-        }
+        if (img) img.addEventListener('error', () => { img.src = PLACEHOLDER; });
 
         jobGrid.appendChild(card);
       });
@@ -322,7 +318,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  /* ------------ modal helpers ------------ */
+  /* ------- modal helpers ------- */
   function openModal(job = null) {
     jobModal.classList.remove('hidden');
     if (job) {
@@ -342,7 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   function closeModal() { jobModal.classList.add('hidden'); }
 
-  /* ------------ events ------------ */
+  /* ------- events ------- */
   document.querySelectorAll('.filters .tab').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.filters .tab').forEach(b => b.classList.remove('active'));
@@ -354,6 +350,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   addJobBtn?.addEventListener('click', () => {
     if (!isAuthed()) { openLoginModal(); return; }
+    if (!can('create_job')) return; // guard
     openModal();
   });
   cancelModal?.addEventListener('click', closeModal);
@@ -402,10 +399,49 @@ document.addEventListener('DOMContentLoaded', () => {
     updateUIAuth();
   });
 
-  // ====== Assign modal listeners ======
+  // Card button clicks with guards
+  const jobGridClick = async (e) => {
+    const action = e.target.dataset.action;
+    if (!action) return;
+
+    if (action === 'open-login') { openLoginModal(); return; }
+
+    if (action === 'trigger-upload') {
+      if (!isAuthed() || !can('upload_photo')) { openLoginModal(); return; }
+      const input = document.getElementById(e.target.dataset.input);
+      if (input) input.click();
+      return;
+    }
+
+    const id = e.target.dataset.id;
+    if (!id && action !== 'edit') return;
+
+    if (action === 'edit') {
+      if (!isAuthed() || !can('edit_job')) return;
+      const job = ALL_JOBS.find(j => j.id == id);
+      openModal(job);
+
+    } else if (action === 'delete') {
+      if (!isAuthed() || !can('delete_job')) return;
+      await authFetch(`${API}/${id}`, { method: 'DELETE' });
+      loadJobs();
+
+    } else if (action === 'assign') {
+      if (!isAuthed() || !can('assign')) { openLoginModal(); return; }
+      openAssignModal(id);
+
+    } else if (action === 'unassign') {
+      if (!isAuthed() || !can('unassign')) return;
+      await authFetch(`${API}/${id}/unassign`, { method: 'POST' });
+      loadJobs();
+    }
+  };
+  jobGrid?.addEventListener('click', jobGridClick);
+
+  // Assign modal
   assignForm?.addEventListener('submit', async (e)=>{
     e.preventDefault();
-    if (!isAuthed()) { openLoginModal(); return; }
+    if (!isAuthed() || !can('assign')) { openLoginModal(); return; }
     const name = assignInput?.value?.trim();
     if (!name || !ASSIGN_JOB_ID) return;
 
@@ -419,14 +455,15 @@ document.addEventListener('DOMContentLoaded', () => {
     loadJobs();
   });
   cancelAssign?.addEventListener('click', closeAssignModal);
-  // ===================================
 
-  // Create / Update job
+  // Create / Update job with guard
   jobForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!isAuthed()) { openLoginModal(); return; }
-
     const id = document.getElementById('jobId').value;
+    if (!isAuthed() || (!id && !can('create_job')) || (id && !can('edit_job'))) {
+      openLoginModal(); return;
+    }
+
     const rawDate = document.getElementById('dueDate').value;
     const payload = {
       job_number: document.getElementById('jobNumber').value,
@@ -453,48 +490,6 @@ document.addEventListener('DOMContentLoaded', () => {
     loadJobs();
   });
 
-  // Card button clicks
-  const jobGridClick = async (e) => {
-    const action = e.target.dataset.action;
-    if (!action) return;
-
-    if (action === 'open-login') {
-      openLoginModal();
-      return;
-    }
-
-    if (action === 'trigger-upload') {
-      if (!isAuthed()) { openLoginModal(); return; }
-      const input = document.getElementById(e.target.dataset.input);
-      if (input) input.click();
-      return;
-    }
-
-    const id = e.target.dataset.id;
-    if (!id && action !== 'edit') return;
-
-    if (action === 'edit') {
-      if (!isAuthed()) { openLoginModal(); return; }
-      const job = ALL_JOBS.find(j => j.id == id);
-      openModal(job);
-
-    } else if (action === 'delete') {
-      if (!isAuthed()) { openLoginModal(); return; }
-      await authFetch(`${API}/${id}`, { method: 'DELETE' });
-      loadJobs();
-
-    } else if (action === 'assign') {
-      if (!isAuthed()) { openLoginModal(); return; }
-      openAssignModal(id);
-
-    } else if (action === 'unassign') {
-      if (!isAuthed()) { openLoginModal(); return; }
-      await authFetch(`${API}/${id}/unassign`, { method: 'POST' });
-      loadJobs();
-    }
-  };
-  jobGrid?.addEventListener('click', jobGridClick);
-
   /* =========================
      ADMIN: Users management
      ========================= */
@@ -503,18 +498,11 @@ document.addEventListener('DOMContentLoaded', () => {
     resetUserForm();
     loadUsers();
   }
-  function closeUsersModal() {
-    usersModal?.classList.add('hidden');
-  }
-  function resetUserForm() {
-    userForm?.reset();
-    if (userIdEl) userIdEl.value = '';
-  }
+  function closeUsersModal() { usersModal?.classList.add('hidden'); }
+  function resetUserForm() { userForm?.reset(); if (userIdEl) userIdEl.value = ''; }
 
   async function loadUsers() {
-    if (!isAuthed()) return;
-    if (CURRENT_USER?.role !== 'admin') return;
-
+    if (!isAuthed() || CURRENT_USER?.role !== 'admin') return;
     try {
       const res = await authFetch(USERS, { method: 'GET' });
       if (!res.ok) {
@@ -631,10 +619,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   closeUsersModalBtn?.addEventListener('click', closeUsersModal);
 
-  // File input change → upload → patch job
+  // Upload change -> patch job (guarded)
   const jobGridChange = async (e) => {
     if (!e.target.classList.contains('photo-input')) return;
-    if (!isAuthed()) { openLoginModal(); return; }
+    if (!isAuthed() || !can('upload_photo')) { openLoginModal(); return; }
 
     const id = e.target.dataset.id;
     const file = e.target.files[0];
