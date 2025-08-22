@@ -1,18 +1,3 @@
-// ---- DEBUG: surface runtime errors on-screen ----
-(function(){
-  const box = document.createElement('div');
-  box.id = 'debugBox';
-  box.style.cssText = 'position:fixed;bottom:10px;left:10px;max-width:60vw;z-index:99999;background:#fff3cd;border:1px solid #f1c40f;color:#333;padding:8px 10px;border-radius:8px;font:12px/1.3 system-ui;box-shadow:0 2px 8px rgba(0,0,0,.15)';
-  box.textContent = 'app.js loaded';
-  document.addEventListener('DOMContentLoaded', ()=>document.body.appendChild(box));
-  window.addEventListener('error', (e) => {
-    box.textContent = `JS Error: ${e.message} at ${e.filename}:${e.lineno}`;
-  });
-  window.addEventListener('unhandledrejection', (e) => {
-    box.textContent = `Promise Rejection: ${e.reason?.message || e.reason}`;
-  });
-})();
-
 console.log('app.js boot');
 fetch('/healthz').then(r=>console.log('healthz', r.status)).catch(console.error);
 fetch('/api/jobs').then(r=>r.text()).then(t=>console.log('/api/jobs sample:', t.slice(0,120)+'…')).catch(console.error);
@@ -186,36 +171,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ------------ data ------------ */
   async function loadJobs() {
-    const qs = CURRENT_FILTER === 'all' ? '' : `?status=${encodeURIComponent(CURRENT_FILTER)}`;
-    try {
-      const res = await fetch(`${API}${qs}?limit=20000&offset=0`);
-      if (!res.ok) {
-        const msg = await res.text().catch(()=> '');
-        console.error('Failed to fetch jobs:', res.status, msg);
-        if (jobGrid) {
-          jobGrid.innerHTML = `<div style="color:#b91c1c">
-            Error loading jobs (HTTP ${res.status}). ${msg || 'See console for details.'}
-          </div>`;
-        }
-        ALL_JOBS = [];
-        updateTabCounts();
-        return;
-      }
-      const data = await res.json();
-      ALL_JOBS = Array.isArray(data) ? data : (data.jobs || data.rows || []);
-      updateTabCounts();
-      render();
-    } catch (err) {
-      console.error('Fetch /api/jobs threw:', err);
+  try {
+    const params = new URLSearchParams({ limit: '20000', offset: '0' });
+    if (String(CURRENT_FILTER || 'all').toLowerCase() !== 'all') {
+      params.set('status', String(CURRENT_FILTER).toLowerCase());
+    }
+
+    const res = await fetch(`${API}?${params.toString()}`);
+    if (!res.ok) {
+      const msg = await res.text().catch(()=> '');
+      console.error('Failed to fetch jobs:', res.status, msg);
       if (jobGrid) {
         jobGrid.innerHTML = `<div style="color:#b91c1c">
-          Error loading jobs (network/JS). See console for details.
+          Error loading jobs (HTTP ${res.status}). ${msg || 'See console for details.'}
         </div>`;
       }
       ALL_JOBS = [];
       updateTabCounts();
+      return;
     }
+
+    const data = await res.json();
+    ALL_JOBS = Array.isArray(data) ? data : (data.jobs || data.rows || []);
+    updateTabCounts();
+    render();
+  } catch (err) {
+    console.error('Fetch /api/jobs threw:', err);
+    if (jobGrid) {
+      jobGrid.innerHTML = `<div style="color:#b91c1c">
+        Error loading jobs (network/JS). See console for details.
+      </div>`;
+    }
+    ALL_JOBS = [];
+    updateTabCounts();
   }
+}
+
 
   /* ------------ UI render ------------ */
   function render() {
