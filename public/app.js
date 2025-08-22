@@ -504,30 +504,6 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   jobGrid?.addEventListener('click', jobGridClick);
 
-  // File input change → upload → patch job
-  const jobGridChange = async (e) => {
-    if (!e.target.classList.contains('photo-input')) return;
-    if (!isAuthed()) { openLoginModal(); return; }
-
-    const id = e.target.dataset.id;
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const fd = new FormData();
-    fd.append('photo', file);
-    const up = await authFetch('/api/upload', { method: 'POST', body: fd });
-    if (!up.ok) { alert('Upload failed'); return; }
-    const { url } = await up.json();
-
-    await authFetch(`${API}/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ employee_photo_url: url })
-    });
-    loadJobs();
-  };
-  jobGrid?.addEventListener('change', jobGridChange);
-
   /* =========================
      ADMIN: Users management
      ========================= */
