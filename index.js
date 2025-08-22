@@ -37,20 +37,39 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']
 }));
+app.options('*', cors());       // handle preflight universally
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-/* ---------- Mount routes (MUST be before 404) ---------- */
-app.use('/api/auth', authRoutes);      // /api/auth/register, /api/auth/login, /api/auth/me
-app.use('/api/jobs', jobRoutes);       // all jobs routes from routes/jobRoutes.js
+/* ---------- Role-based helper (works with JWT roles) ---------- */
+function authorizeRoles(...roles) {
+  return (req, res, next) => {
+    // authMiddleware must have already set req.user
+    const role = req.user?.role;
+    if (!role || !roles.includes(role)) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+    next();
+  };
+}
 
-// Protected upload endpoint (JWT required)
-app.post('/api/upload', authMiddleware, upload.single('photo'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  const url = `/uploads/${req.file.filename}`;
-  res.json({ url });
-});
+/* ---------- Mount routes (MUST be before 404) ---------- */
+app.use('/api/auth', authRoutes);   // /api/auth/register, /api/auth/login, /api/auth/me
+app.use('/api/jobs', jobRoutes);    // all jobs routes from routes/jobRoutes.js
+
+// Protected upload endpoint (JWT required; admin or employment may upload)
+app.post(
+  '/api/upload',
+  authMiddleware,
+  authorizeRoles('admin', 'employment'),
+  upload.single('photo'),
+  (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const url = `/uploads/${req.file.filename}`;
+    res.json({ url });
+  }
+);
 
 /* ---------- Health + root ---------- */
 app.get('/healthz', (_req, res) => res.status(200).json({ ok: true }));
