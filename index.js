@@ -9,6 +9,7 @@ const helmet = require('helmet');
 // Route + auth middleware (JWT)
 const authRoutes = require('./routes/authRoutes');
 const jobRoutes = require('./routes/jobRoutes');
+const usersRoutes = require('./routes/usersRoutes'); // ← NEW: admin users portal routes
 const authMiddleware = require('./middleware/authMiddleware');
 
 const app = express();
@@ -57,6 +58,9 @@ function authorizeRoles(...roles) {
 /* ---------- Mount routes (MUST be before 404) ---------- */
 app.use('/api/auth', authRoutes);   // /api/auth/register, /api/auth/login, /api/auth/me
 app.use('/api/jobs', jobRoutes);    // all jobs routes from routes/jobRoutes.js
+
+// NEW: Admin-only users management API
+app.use('/api/users', authMiddleware, authorizeRoles('admin'), usersRoutes);
 
 // Protected upload endpoint (JWT required; admin or employment may upload)
 app.post(

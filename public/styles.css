@@ -189,3 +189,14 @@ button:disabled{
   font-size: 14px;
   line-height: 1.1;
 }
+
+/* Users list rows inside admin modal (fallback if inline styles removed) */
+.users-row {
+  display: grid;
+  grid-template-columns:2fr 1.5fr 1 fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+}
+

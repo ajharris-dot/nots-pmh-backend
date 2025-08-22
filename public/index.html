@@ -21,8 +21,13 @@
         <button class="tab" data-filter="Open">Open</button>
         <button class="tab" data-filter="Filled">Filled</button>
       </div>
+
       <button id="loginBtn" class="secondary">Log In</button>
       <button id="logoutBtn" class="secondary" style="display:none">Log Out</button>
+
+      <!-- Admin-only control (shown by app.js when role === 'admin') -->
+      <button id="manageUsersBtn" class="secondary" style="display:none">Manage Users</button>
+
       <button id="refresh" class="secondary">Refresh</button>
       <button id="addJobBtn" class="primary">+ Add Position</button>
     </div>
@@ -38,8 +43,8 @@
     <div id="jobGrid" class="card-grid"></div>
   </main>
 
-  <!-- Add/Edit Modal -->
-  <div id="jobModal" class="modal hidden">
+  <!-- Add/Edit Position Modal -->
+  <div id="jobModal" class="modal hidden" aria-hidden="true">
     <div class="modal-card">
       <h2 id="modalTitle">Add Position</h2>
       <form id="jobForm">
@@ -75,7 +80,7 @@
   </div>
 
   <!-- Login Modal -->
-  <div id="loginModal" class="modal hidden">
+  <div id="loginModal" class="modal hidden" aria-hidden="true">
     <div class="modal-card">
       <h2>Log In</h2>
       <form id="loginForm">
@@ -94,7 +99,7 @@
   </div>
 
   <!-- Assign Employee Modal -->
-  <div id="assignModal" class="modal hidden">
+  <div id="assignModal" class="modal hidden" aria-hidden="true">
     <div class="modal-card">
       <h2>Assign Employee</h2>
       <form id="assignForm">
@@ -107,6 +112,53 @@
           <button type="button" id="cancelAssign" class="secondary">Cancel</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Admin: Manage Users Modal -->
+  <div id="usersModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-card" style="width:min(720px,95vw)">
+      <h2>Manage Users</h2>
+
+      <!-- Create / Edit form -->
+      <form id="userForm">
+        <input type="hidden" id="userId" />
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+          <label>Email
+            <input type="email" id="userEmail" required />
+          </label>
+          <label>Name
+            <input type="text" id="userName" />
+          </label>
+          <label>Role
+            <select id="userRole" required>
+              <option value="admin">Admin</option>
+              <option value="employment">Employment</option>
+              <option value="operations">Operations</option>
+              <option value="manager">Manager</option>
+              <option value="user">User</option>
+            </select>
+          </label>
+          <label>Password
+            <input type="password" id="userPassword" placeholder="Set or change password" />
+          </label>
+        </div>
+
+        <div class="modal-actions">
+          <button type="submit" class="primary">Save User</button>
+          <button type="button" id="resetUserForm" class="secondary">New</button>
+          <button type="button" id="closeUsersModal" class="secondary">Close</button>
+        </div>
+      </form>
+
+      <!-- Users list -->
+      <div style="margin-top:16px;">
+        <h3 style="margin:0 0 8px 0;">Existing Users</h3>
+        <div id="usersList" style="max-height:300px; overflow:auto; border:1px solid var(--line); border-radius:8px; padding:8px;">
+          <!-- populated by app.js -->
+        </div>
+      </div>
     </div>
   </div>
 

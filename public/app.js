@@ -1,10 +1,12 @@
 const API = '/api/jobs';
 const AUTH = '/api/auth';
+const USERS = '/api/users';
 const PLACEHOLDER = './placeholder-v2.png?v=20250814'; // cache-busted placeholder
 const TOKEN_KEY = 'authToken';
 
 let ALL_JOBS = [];
 let CURRENT_FILTER = 'all';
+let CURRENT_USER = null; // { id, email, name, role } or null
 
 document.addEventListener('DOMContentLoaded', () => {
   const jobGrid = document.getElementById('jobGrid');
@@ -23,6 +25,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const loginModal = document.getElementById('loginModal');
   const loginForm = document.getElementById('loginForm');
   const cancelLogin = document.getElementById('cancelLogin');
+
+  // Admin users portal UI
+  const manageUsersBtn = document.getElementById('manageUsersBtn');
+  const usersModal = document.getElementById('usersModal');
+  const closeUsersModalBtn = document.getElementById('closeUsersModal');
+  const userForm = document.getElementById('userForm');
+  const resetUserFormBtn = document.getElementById('resetUserForm');
+  const usersList = document.getElementById('usersList');
+  const userIdEl = document.getElementById('userId');
+  const userEmailEl = document.getElementById('userEmail');
+  const userNameEl = document.getElementById('userName');
+  const userRoleEl = document.getElementById('userRole');
+  const userPasswordEl = document.getElementById('userPassword');
 
   /* ====== Assign modal elements & helpers ====== */
   const assignModal  = document.getElementById('assignModal');
@@ -74,6 +89,18 @@ document.addEventListener('DOMContentLoaded', () => {
     return fetch(url, { ...options, headers });
   }
 
+  async function fetchMe() {
+    if (!isAuthed()) { CURRENT_USER = null; return; }
+    try {
+      const res = await authFetch(`${AUTH}/me`);
+      if (!res.ok) throw new Error('me failed');
+      const data = await res.json();
+      CURRENT_USER = data?.authenticated ? data.user : null;
+    } catch {
+      CURRENT_USER = null;
+    }
+  }
+
   function openLoginModal(){
     loginForm?.reset();
     loginModal?.classList.remove('hidden');
@@ -92,10 +119,16 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       loginBtn?.setAttribute('style', '');
       logoutBtn?.setAttribute('style', 'display:none');
-      // Optional: disable "Add Position" when logged out
       addJobBtn?.setAttribute('disabled', 'disabled');
     }
-    // Re-render to swap action buttons text if you want to gate in-card UI
+
+    // Admin-only "Manage Users" button
+    if (CURRENT_USER?.role === 'admin') {
+      manageUsersBtn?.setAttribute('style', '');
+    } else {
+      manageUsersBtn?.setAttribute('style', 'display:none');
+    }
+
     render();
   }
 
@@ -136,7 +169,6 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadJobs() {
     const qs = CURRENT_FILTER === 'all' ? '' : `?status=${encodeURIComponent(CURRENT_FILTER)}`;
     try {
-      // Public GET
       const res = await fetch(`${API}${qs}?limit=20000&offset=0`);
       if (!res.ok) {
         const msg = await res.text().catch(()=> '');
@@ -215,7 +247,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const inputId = `file_${job.id}`;
         const hasEmployee = !!(job.employee && String(job.employee).trim().length);
 
-        // If not logged in, replace protected action buttons with a single "Log in to manage" CTA
         const actionsHtml = authed
           ? `
             ${isFilled(job)
@@ -296,7 +327,6 @@ document.addEventListener('DOMContentLoaded', () => {
       modalTitle.textContent = 'Add Position';
       jobForm.reset();
       document.getElementById('jobId').value = '';
-      // focus job number when adding
       setTimeout(() => document.getElementById('jobNumber')?.focus(), 50);
     }
   }
@@ -344,6 +374,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       if (data?.token) {
         setToken(data.token);
+        await fetchMe();
         closeLoginModal();
         updateUIAuth();
       } else {
@@ -355,8 +386,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  logoutBtn?.addEventListener('click', () => {
+  logoutBtn?.addEventListener('click', async () => {
     clearToken();
+    CURRENT_USER = null;
     updateUIAuth();
   });
 
@@ -379,7 +411,7 @@ document.addEventListener('DOMContentLoaded', () => {
   cancelAssign?.addEventListener('click', closeAssignModal);
   // ===================================
 
-  // Create / Update
+  // Create / Update job
   jobForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!isAuthed()) { openLoginModal(); return; }
@@ -477,7 +509,170 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   jobGrid?.addEventListener('change', jobGridChange);
 
+  /* =========================
+     ADMIN: Users management
+     ========================= */
+  function openUsersModal() {
+    usersModal?.classList.remove('hidden');
+    resetUserForm();
+    loadUsers();
+  }
+  function closeUsersModal() {
+    usersModal?.classList.add('hidden');
+  }
+  function resetUserForm() {
+    userForm?.reset();
+    if (userIdEl) userIdEl.value = '';
+  }
+
+  async function loadUsers() {
+    if (!isAuthed()) return;
+    if (CURRENT_USER?.role !== 'admin') return;
+
+    try {
+      const res = await authFetch(USERS, { method: 'GET' });
+      if (!res.ok) {
+        const t = await res.text().catch(()=> '');
+        usersList.innerHTML = `<div style="color:#b91c1c">Error loading users: ${t || res.status}</div>`;
+        return;
+      }
+      const list = await res.json();
+      renderUsers(list);
+    } catch (e) {
+      console.error('loadUsers error:', e);
+      usersList.innerHTML = `<div style="color:#b91c1c">Error loading users (network/JS)</div>`;
+    }
+  }
+
+  function renderUsers(list) {
+    if (!Array.isArray(list) || !list.length) {
+      usersList.innerHTML = `<div style="color:#6b7280">No users yet.</div>`;
+      return;
+    }
+    usersList.innerHTML = '';
+    list.forEach(u => {
+      const row = document.createElement('div');
+      row.style.display = 'grid';
+      row.style.gridTemplateColumns = '2fr 1.5fr 1fr auto';
+      row.style.gap = '8px';
+      row.style.alignItems = 'center';
+      row.style.padding = '8px';
+      row.style.borderBottom = '1px solid var(--line)';
+
+      row.innerHTML = `
+        <div>${u.email}</div>
+        <div>${u.name || ''}</div>
+        <div><span class="badge">${u.role}</span></div>
+        <div style="display:flex; gap:6px; justify-content:flex-end;">
+          <button class="secondary" data-action="edit-user" data-id="${u.id}" data-email="${u.email}" data-name="${u.name || ''}" data-role="${u.role}">Edit</button>
+          <button class="danger" data-action="delete-user" data-id="${u.id}" data-email="${u.email}">Delete</button>
+        </div>
+      `;
+      usersList.appendChild(row);
+    });
+  }
+
+  usersList?.addEventListener('click', async (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    const action = btn.dataset.action;
+    if (action === 'edit-user') {
+      userIdEl.value = btn.dataset.id || '';
+      userEmailEl.value = btn.dataset.email || '';
+      userNameEl.value = btn.dataset.name || '';
+      userRoleEl.value = btn.dataset.role || 'user';
+      userPasswordEl.value = '';
+      userEmailEl.focus();
+    } else if (action === 'delete-user') {
+      const id = btn.dataset.id;
+      const email = btn.dataset.email;
+      if (!id) return;
+      if (!confirm(`Delete user ${email}?`)) return;
+      const res = await authFetch(`${USERS}/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const t = await res.text().catch(()=> '');
+        alert(`Delete failed: ${t || res.status}`);
+      }
+      loadUsers();
+    }
+  });
+
+  userForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (CURRENT_USER?.role !== 'admin') return;
+
+    const id = userIdEl.value || '';
+    const payload = {
+      email: userEmailEl.value?.trim(),
+      name: userNameEl.value?.trim(),
+      role: userRoleEl.value,
+    };
+    const pw = userPasswordEl.value || '';
+    if (pw) payload.password = pw;
+
+    try {
+      let res;
+      if (id) {
+        res = await authFetch(`${USERS}/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } else {
+        res = await authFetch(USERS, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      }
+      if (!res.ok) {
+        const t = await res.text().catch(()=> '');
+        alert(`Save failed: ${t || res.status}`);
+        return;
+      }
+      resetUserForm();
+      loadUsers();
+    } catch (err) {
+      console.error('save user error:', err);
+      alert('Save failed (network).');
+    }
+  });
+
+  resetUserFormBtn?.addEventListener('click', resetUserForm);
+  manageUsersBtn?.addEventListener('click', () => {
+    if (CURRENT_USER?.role !== 'admin') return;
+    openUsersModal();
+  });
+  closeUsersModalBtn?.addEventListener('click', closeUsersModal);
+
+  // File input change → upload → patch job
+  const jobGridChange = async (e) => {
+    if (!e.target.classList.contains('photo-input')) return;
+    if (!isAuthed()) { openLoginModal(); return; }
+
+    const id = e.target.dataset.id;
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const fd = new FormData();
+    fd.append('photo', file);
+    const up = await authFetch('/api/upload', { method: 'POST', body: fd });
+    if (!up.ok) { alert('Upload failed'); return; }
+    const { url } = await up.json();
+
+    await authFetch(`${API}/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employee_photo_url: url })
+    });
+    loadJobs();
+  };
+  jobGrid?.addEventListener('change', jobGridChange);
+
   /* init */
-  updateUIAuth();
-  loadJobs();
+  (async () => {
+    await fetchMe();
+    updateUIAuth();
+    loadJobs();
+  })();
 });
