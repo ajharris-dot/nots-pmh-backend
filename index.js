@@ -31,7 +31,7 @@ app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors({
   origin: true,
-  credentials: false,
+  credentials: false, // using JWT, not cookies
   allowedHeaders: ['Content-Type', 'Authorization'],
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']
 }));
@@ -51,10 +51,51 @@ function authorizeRoles(...roles) {
 }
 
 /* ---------- Routes ---------- */
+// Auth
 app.use('/api/auth', authRoutes);
+
+// Role gates in front of jobRoutes:
+// - GETs remain public
+// - POST /api/jobs -> admin, operations
+app.post('/api/jobs',
+  authMiddleware,
+  authorizeRoles('admin', 'operations'),
+  (req, _res, next) => next()
+);
+
+// - PATCH /api/jobs/:id -> admin
+app.patch('/api/jobs/:id',
+  authMiddleware,
+  authorizeRoles('admin'),
+  (req, _res, next) => next()
+);
+
+// - DELETE /api/jobs/:id -> admin
+app.delete('/api/jobs/:id',
+  authMiddleware,
+  authorizeRoles('admin'),
+  (req, _res, next) => next()
+);
+
+// - POST /api/jobs/:id/assign|unassign -> admin, employment
+app.post('/api/jobs/:id/assign',
+  authMiddleware,
+  authorizeRoles('admin', 'employment'),
+  (req, _res, next) => next()
+);
+app.post('/api/jobs/:id/unassign',
+  authMiddleware,
+  authorizeRoles('admin', 'employment'),
+  (req, _res, next) => next()
+);
+
+// Jobs router (public GETs, protected writes pass-through due to gates above)
 app.use('/api/jobs', jobRoutes);
+
+// Admin-only Users portal
 app.use('/api/users', authMiddleware, authorizeRoles('admin'), usersRoutes);
 
+// Protected upload (admins + employment can upload photos)
 app.post(
   '/api/upload',
   authMiddleware,
