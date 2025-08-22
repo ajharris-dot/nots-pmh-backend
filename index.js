@@ -6,15 +6,14 @@ const fs = require('fs');
 const multer = require('multer');
 const helmet = require('helmet');
 
-// Route + auth middleware (JWT)
 const authRoutes = require('./routes/authRoutes');
 const jobRoutes = require('./routes/jobRoutes');
-const usersRoutes = require('./routes/usersRoutes'); // ← NEW: admin users portal routes
+const usersRoutes = require('./routes/usersRoutes');
 const authMiddleware = require('./middleware/authMiddleware');
 
 const app = express();
 
-/* ---------- Uploads setup (kept local for now) ---------- */
+/* ---------- Uploads setup ---------- */
 const UPLOAD_DIR = path.join(__dirname, 'public', 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
@@ -27,29 +26,22 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-/* ---------- App middleware ---------- */
+/* ---------- Middleware ---------- */
 app.set('trust proxy', 1);
 app.use(helmet());
-
-// Allow frontend to call API (including Authorization header)
 app.use(cors({
-  origin: true,                 // reflect request origin (or set your exact URL)
-  credentials: false,           // not using cookie sessions
+  origin: true,
+  credentials: false,
   allowedHeaders: ['Content-Type', 'Authorization'],
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']
 }));
-app.options('*', cors());       // handle preflight universally
-
+app.options('*', cors());
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-/* ---------- Role-based helper (works with JWT roles) ---------- */
+/* ---------- Role helper ---------- */
 function authorizeRoles(...roles) {
-  return (req, res, next) => (!req.user || !roles.includes(req.user.role))
-    ? res.status(403).json({ error: 'forbidden' })
-    : next();
-}
-    // authMiddleware must have already set req.user
+  return (req, res, next) => {
     const role = req.user?.role;
     if (!role || !roles.includes(role)) {
       return res.status(403).json({ error: 'forbidden' });
@@ -58,14 +50,11 @@ function authorizeRoles(...roles) {
   };
 }
 
-/* ---------- Mount routes (MUST be before 404) ---------- */
-app.use('/api/auth', authRoutes);   // /api/auth/register, /api/auth/login, /api/auth/me
-app.use('/api/jobs', jobRoutes);    // all jobs routes from routes/jobRoutes.js
-
-// NEW: Admin-only users management API
+/* ---------- Routes ---------- */
+app.use('/api/auth', authRoutes);
+app.use('/api/jobs', jobRoutes);
 app.use('/api/users', authMiddleware, authorizeRoles('admin'), usersRoutes);
 
-// Protected upload endpoint (JWT required; admin or employment may upload)
 app.post(
   '/api/upload',
   authMiddleware,
@@ -90,13 +79,13 @@ app.get('/debug/env', (_req, res) => {
     DB_NAME: !!process.env.DB_NAME,
     DB_PASSWORD: !!process.env.DB_PASSWORD,
     DB_PORT: process.env.DB_PORT || null,
-    SESSION_SECRET: !!process.env.SESSION_SECRET,
+    SESSION_SECRET: !!process.env.SESSION_SECRET
   });
 });
 
-/* ---------- 404 fallback (MUST be last) ---------- */
+/* ---------- 404 fallback ---------- */
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 
-/* ---------- Start server ---------- */
+/* ---------- Start ---------- */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));

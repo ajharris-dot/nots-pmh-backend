@@ -6,13 +6,9 @@ const db = require('../models/db');
 const router = express.Router();
 
 const ALLOWED_ROLES = new Set(['admin', 'employment', 'operations', 'manager', 'user']);
-
 const toUser = (r) => ({ id: r.id, email: r.email, name: r.name, role: r.role });
 
-/**
- * GET /api/users
- * List all users (admin only; auth/role checks are on the mount in index.js)
- */
+// GET /api/users  (admin only; auth/role checks are on the mount)
 router.get('/', async (_req, res) => {
   try {
     const { rows } = await db.query(
@@ -27,10 +23,7 @@ router.get('/', async (_req, res) => {
   }
 });
 
-/**
- * POST /api/users
- * Create user: { email, name?, role, password }
- */
+// POST /api/users  { email, name?, role, password }
 router.post('/', async (req, res) => {
   try {
     let { email, name, role, password } = req.body || {};
@@ -38,18 +31,11 @@ router.post('/', async (req, res) => {
     name = name ? String(name).trim() : null;
     role = String(role || 'user').trim().toLowerCase();
 
-    if (!email || !password) {
-      return res.status(400).json({ error: 'email and password required' });
-    }
-    if (!ALLOWED_ROLES.has(role)) {
-      return res.status(400).json({ error: 'invalid role' });
-    }
+    if (!email || !password) return res.status(400).json({ error: 'email and password required' });
+    if (!ALLOWED_ROLES.has(role)) return res.status(400).json({ error: 'invalid role' });
 
-    // unique email
     const exists = await db.query('SELECT 1 FROM users WHERE email = $1', [email]);
-    if (exists.rows.length) {
-      return res.status(409).json({ error: 'email already exists' });
-    }
+    if (exists.rows.length) return res.status(409).json({ error: 'email already exists' });
 
     const hash = await bcrypt.hash(password, 10);
     const { rows } = await db.query(
@@ -65,11 +51,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-/**
- * PATCH /api/users/:id
- * Update user: { email?, name?, role?, password? }
- * Only provided fields are updated. If password is provided, re-hash.
- */
+// PATCH /api/users/:id  { email?, name?, role?, password? }
 router.patch('/:id', async (req, res) => {
   try {
     const id = req.params.id;
@@ -82,7 +64,6 @@ router.patch('/:id', async (req, res) => {
     if (email !== undefined) {
       const e = String(email || '').trim().toLowerCase();
       if (!e) return res.status(400).json({ error: 'email cannot be empty' });
-      // check unique email (other than this user)
       const dup = await db.query('SELECT 1 FROM users WHERE email = $1 AND id <> $2', [e, id]);
       if (dup.rows.length) return res.status(409).json({ error: 'email already exists' });
       fields.push(`email = $${i++}`); vals.push(e);
@@ -102,9 +83,7 @@ router.patch('/:id', async (req, res) => {
       fields.push(`password_hash = $${i++}`); vals.push(hash);
     }
 
-    if (!fields.length) {
-      return res.status(400).json({ error: 'no fields provided' });
-    }
+    if (!fields.length) return res.status(400).json({ error: 'no fields provided' });
 
     vals.push(id);
     const { rows } = await db.query(
@@ -120,9 +99,7 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
-/**
- * DELETE /api/users/:id
- */
+// DELETE /api/users/:id
 router.delete('/:id', async (req, res) => {
   try {
     const { rowCount } = await db.query('DELETE FROM users WHERE id = $1', [req.params.id]);
