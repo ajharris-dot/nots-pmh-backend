@@ -45,7 +45,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 /* ---------- Role-based helper (works with JWT roles) ---------- */
 function authorizeRoles(...roles) {
-  return (req, res, next) => {
+  return (req, res, next) => (!req.user || !roles.includes(req.user.role))
+    ? res.status(403).json({ error: 'forbidden' })
+    : next();
+}
     // authMiddleware must have already set req.user
     const role = req.user?.role;
     if (!role || !roles.includes(role)) {
