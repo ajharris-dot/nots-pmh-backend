@@ -286,3 +286,70 @@ button:disabled{
 .card-grid.list {
   display: none;
 }
+
+/* =========================
+   View width + columns
+   ========================= */
+
+/* LIST VIEW: cap content to 70% of the viewport (but not wider than 1200px) */
+body.list-view .content {
+  display: flex;
+  justify-content: center;
+}
+body.list-view #jobGrid {
+  width: 70vw;           /* 70% of screen */
+  max-width: 1200px;     /* optional hard cap so it doesn’t get too wide on huge screens */
+}
+
+/* CARD VIEW: allow more than 5 across on very wide screens */
+body.card-view #jobGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); /* grows to 6,7,... on big screens */
+  gap: 24px;
+}
+
+/* CARD VIEW: never go below 5 across as the screen shrinks */
+@media (max-width: 1600px) {
+  body.card-view #jobGrid {
+    grid-template-columns: repeat(5, minmax(0, 1fr)); /* lock at 5 columns */
+  }
+}
+
+/* (Optional) If the page ever gets narrower than what 5 columns can comfortably fit,
+   let the grid horizontally scroll instead of wrapping to fewer than 5. */
+@media (max-width: 1200px) {
+  body.card-view .content {
+    overflow-x: auto;
+  }
+  body.card-view #jobGrid {
+    min-width: 1100px; /* ~5 columns worth; adjust if your cards are wider/narrower */
+  }
+}
+
+/* LIST ROW THUMBNAIL: keep the picture reasonable in list mode */
+body.list-view .job-card.list-row .photo-container {
+  width: 140px;     /* small thumbnail */
+  height: 90px;     /* 16:10-ish */
+  flex: 0 0 140px;
+}
+
+/* Toggle view buttons (cards/list) */
+.view-toggle button {
+  background-color: #e5e5e5;  /* light gray by default */
+  color: #333;
+  border: 1px solid #ccc;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.view-toggle button:hover {
+  background-color: #d4d4d4;  /* slightly darker on hover */
+}
+
+.view-toggle button.active {
+  background-color: #555;     /* dark gray when clicked/active */
+  color: #fff;                /* white text for contrast */
+  border-color: #444;
+}
