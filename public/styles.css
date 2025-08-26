@@ -56,16 +56,60 @@ button:disabled{ opacity:0.55; cursor:not-allowed; }
 }
 
 /* Search bar */
-.toolbar{ margin-bottom:12px; }
+.toolbar{ margin-bottom:12px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .toolbar input{
-  width:100%; border:1px solid var(--line); border-radius:8px; padding:10px 12px; outline:none;
+  flex:1;
+  border:1px solid var(--line); border-radius:8px; padding:10px 12px; outline:none;
 }
 
-/* Card grid (base) — let view-specific rules set the columns */
+/* View toggle (light gray default, dark gray active) */
+.view-toggle { display:flex; gap:6px; align-items:center; }
+.view-toggle button {
+  background-color:#e5e5e5;
+  color:#333;
+  border:1px solid #ccc;
+  padding:6px 12px;
+  border-radius:6px;
+  cursor:pointer;
+  transition:background-color .2s ease, color .2s ease, border-color .2s ease;
+}
+.view-toggle button:hover { background-color:#d4d4d4; }
+.view-toggle button.active {
+  background-color:#555;
+  color:#fff;
+  border-color:#444;
+}
+
+/* Base grid container (columns set by view-specific rules) */
 .card-grid{
   display:grid;
   gap:24px;
   padding:10px 0;
+}
+
+/* ===== CARD VIEW: never fewer than 5 columns ===== */
+body.card-view #jobGrid{
+  display:grid;
+  gap:24px;
+  grid-template-columns: repeat(5, minmax(0, 1fr)); /* hard floor of 5 */
+}
+/* Add more columns as screens get massive */
+@media (min-width: 1900px){
+  body.card-view #jobGrid{
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+@media (min-width: 2200px){
+  body.card-view #jobGrid{
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+}
+
+/* ===== LIST VIEW: cap to 70% width and center ===== */
+body.list-view .content{ display:flex; justify-content:center; }
+body.list-view #jobGrid{
+  width:70vw;
+  max-width:1200px;
 }
 
 /* Job card */
@@ -154,24 +198,6 @@ button:disabled{ opacity:0.55; cursor:not-allowed; }
   border-bottom: 1px solid var(--line);
 }
 
-/* ===== View toggle (light gray default, dark gray active) ===== */
-.view-toggle { display:flex; gap:6px; align-items:center; }
-.view-toggle button {
-  background-color:#e5e5e5;
-  color:#333;
-  border:1px solid #ccc;
-  padding:6px 12px;
-  border-radius:6px;
-  cursor:pointer;
-  transition:background-color .2s ease, color .2s ease, border-color .2s ease;
-}
-.view-toggle button:hover { background-color:#d4d4d4; }
-.view-toggle button.active {
-  background-color:#555;
-  color:#fff;
-  border-color:#444;
-}
-
 /* ===== List view layout ===== */
 .list-grid{
   display:grid;
@@ -209,36 +235,3 @@ button:disabled{ opacity:0.55; cursor:not-allowed; }
 
 /* Hide the card grid when list is enabled */
 .card-grid.list{ display:none; }
-
-/* =========================
-   View width + columns
-   ========================= */
-
-/* LIST VIEW: cap content to 70% of viewport (max 1200px) and center it */
-body.list-view .content{ display:flex; justify-content:center; }
-body.list-view #jobGrid{
-  width:70vw;
-  max-width:1200px;
-}
-
-/* CARD VIEW:
-   - Always provide at least 5 card-widths of space (horizontal scroll if needed)
-   - On wider screens, allow more than 5 across automatically */
-body.card-view .content{ overflow-x:auto; }
-body.card-view #jobGrid{
-  display:grid;
-  /* min 260px card width, grows to fill; auto-fit lets it go 6,7,... on huge screens */
-  grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));
-  gap:24px;
-  /* Force enough width to hold 5 cards + 4 gaps (so it never collapses below 5) */
-  min-width: calc(5 * 260px + 4 * 24px); /* = 1396px */
-}
-
-/* Optional: if you want a bit more breathing room on truly massive screens,
-   you can increase the min card width above 260px with a media query: */
-@media (min-width: 2000px){
-  body.card-view #jobGrid{
-    grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));
-    min-width: calc(5 * 280px + 4 * 24px);
-  }
-}
