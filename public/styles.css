@@ -26,27 +26,10 @@ html,body{ margin:0; padding:0; font-family:system-ui,-apple-system,Segoe UI,Rob
   align-items: center;
   padding: 10px 20px;
 }
-
-.topbar h1 {
-  margin: 0;
-  font-size: 20px;
-  justify-self: start;
-}
-
-.topbar-logo {
-  justify-self: center;
-}
-
-.topbar-logo img {
-  height: 40px; /* adjust size as needed */
-}
-
-.topbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  justify-self: end;
-}
+.topbar h1 { margin:0; font-size:20px; justify-self:start; }
+.topbar-logo { justify-self:center; }
+.topbar-logo img { height:40px; }
+.topbar-actions { display:flex; align-items:center; gap:10px; justify-self:end; }
 
 /* Buttons */
 button{ cursor:pointer; border-radius:8px; padding:8px 12px; border:1px solid transparent; font-weight:600; }
@@ -58,21 +41,16 @@ button{ cursor:pointer; border-radius:8px; padding:8px 12px; border:1px solid tr
 .danger:hover{ filter:brightness(0.95); }
 
 /* Disabled state for auth-gated actions */
-button:disabled{
-  opacity:0.55;
-  cursor:not-allowed;
-}
+button:disabled{ opacity:0.55; cursor:not-allowed; }
 
 /* Filters */
 .filters{ display:flex; gap:6px; }
-.filters .tab{
-  background:#222; color:#ddd; border:1px solid #333;
-}
+.filters .tab{ background:#222; color:#ddd; border:1px solid #333; }
 .filters .tab.active{ background:#444; color:#fff; }
 
 /* Main wrapper */
 .content{
-  max-width: none;   /* allow grid to span full window */
+  max-width:none;
   margin:18px auto;
   padding:0 16px;
 }
@@ -83,12 +61,11 @@ button:disabled{
   width:100%; border:1px solid var(--line); border-radius:8px; padding:10px 12px; outline:none;
 }
 
-/* Card grid */
+/* Card grid (base) — let view-specific rules set the columns */
 .card-grid{
   display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); /* auto-fit can fill gaps better */
-  gap:24px;  /* increased spacing between cards */
-  padding: 10px 0; /* optional: vertical breathing room */
+  gap:24px;
+  padding:10px 0;
 }
 
 /* Job card */
@@ -96,29 +73,19 @@ button:disabled{
   background:var(--panel);
   border:1px solid var(--line);
   border-radius:12px;
-  box-shadow:0 4px 12px rgba(0,0,0,0.12); /* deeper shadow */
+  box-shadow:0 4px 12px rgba(0,0,0,0.12);
   overflow:hidden;
   transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
-
-.job-card:hover {
-  box-shadow:0 6px 18px rgba(0,0,0,0.16); /* stronger hover shadow */
-  transform: translateY(-2px);             /* small hover lift */
-}
+.job-card:hover { box-shadow:0 6px 18px rgba(0,0,0,0.16); transform: translateY(-2px); }
 
 .photo-container{ position:relative; background:var(--accent-100); }
-.job-card img{
-  display:block; width:100%; height:180px; object-fit:cover;
-}
+.job-card img{ display:block; width:100%; height:180px; object-fit:cover; }
 
 .card-body{ padding:12px 12px 6px 12px; }
-.card-title{
-  display:flex; align-items:baseline; gap:8px; margin:0 0 6px 0;
-}
+.card-title{ display:flex; align-items:baseline; gap:8px; margin:0 0 6px 0; }
 .card-title h3{ margin:0; font-size:18px; font-weight:700; }
-.badge{
-  font-size:12px; padding:2px 6px; border-radius:999px; border:1px solid var(--line); color:var(--muted); background:#fff;
-}
+.badge{ font-size:12px; padding:2px 6px; border-radius:999px; border:1px solid var(--line); color:var(--muted); background:#fff; }
 .badge-open{ background:#f8fafc; border-color:#e2e8f0; color:#0f766e; }
 .badge-filled{ background:#fdf2f2; border-color:#fee2e2; color:#991b1b; }
 
@@ -129,16 +96,10 @@ button:disabled{
   display:flex; gap:8px; padding:10px 12px 12px 12px; border-top:1px solid var(--line);
   flex-wrap:wrap;
 }
+.card-actions .login-gate-btn{ font-weight:600; }
 
-/* Optional: the "Log in to manage" placeholder button style (already uses .secondary) */
-.card-actions .login-gate-btn{
-  font-weight:600;
-}
-
-/* Upload button (only renders on Filled cards in JS) */
-.upload-btn{
-  background:var(--accent); color:#fff; border:none; padding:8px 10px; border-radius:8px;
-}
+/* Upload button */
+.upload-btn{ background:var(--accent); color:#fff; border:none; padding:8px 10px; border-radius:8px; }
 .upload-btn:hover{ background:var(--accent-600); }
 
 /* Modal */
@@ -153,203 +114,131 @@ button:disabled{
 }
 .modal-card h2{ margin:0 0 12px 0; }
 
-/* Generalized modal form styles so ALL modals (job, login, assign) match */
+/* Modal form styles (all modals) */
 .modal-card label{ display:block; font-weight:600; margin:10px 0 4px 0; }
-.modal-card input{
+.modal-card input, .modal-card select{
   width:100%; border:1px solid var(--line); border-radius:8px; padding:10px 12px; outline:none;
 }
 .modal-actions{ display:flex; gap:10px; margin-top:14px; justify-content:flex-end; }
 
-/* ============================
-   Job Card Photo Styling
-   ============================ */
+/* Photo styling */
 .photo-container {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 9;   /* Change ratio if you want taller/shorter photo area */
+  aspect-ratio: 16 / 9;
   overflow: hidden;
-  background: var(--accent-100); /* fallback color before photo loads */
+  background: var(--accent-100);
   border-bottom: 1px solid var(--line);
 }
-
 .photo-container img {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: contain;   /* Fits whole image, no cropping */
-  object-position: center; /* Center the image in the box */
+  object-fit: contain;
+  object-position: center;
   display: block;
-  background: #f6f6f6;   /* optional: neutral backdrop for empty space */
+  background: #f6f6f6;
 }
 
-/* Slightly larger filter tabs for label + count */
-.filters .tab {
-  padding: 8px 14px;
-  font-size: 14px;
-  line-height: 1.1;
-}
+/* Bigger filter tabs */
+.filters .tab { padding: 8px 14px; font-size: 14px; line-height: 1.1; }
 
-/* Users list rows inside admin modal (fallback if inline styles removed) */
+/* Users list row (admin modal) */
 .users-row {
   display: grid;
-  grid-template-columns:2fr 1.5fr 1 fr auto;
+  grid-template-columns:2fr 1.5fr 1fr auto;
   gap: 8px;
   align-items: center;
   padding: 8px;
   border-bottom: 1px solid var(--line);
 }
 
-/* ===== View toggle ===== */
-.view-toggle {
-  display: flex;
-  gap: 6px;
-  align-items: center;
+/* ===== View toggle (light gray default, dark gray active) ===== */
+.view-toggle { display:flex; gap:6px; align-items:center; }
+.view-toggle button {
+  background-color:#e5e5e5;
+  color:#333;
+  border:1px solid #ccc;
+  padding:6px 12px;
+  border-radius:6px;
+  cursor:pointer;
+  transition:background-color .2s ease, color .2s ease, border-color .2s ease;
 }
-.view-toggle .active {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
+.view-toggle button:hover { background-color:#d4d4d4; }
+.view-toggle button.active {
+  background-color:#555;
+  color:#fff;
+  border-color:#444;
 }
 
 /* ===== List view layout ===== */
-.list-grid {
-  display: grid;
-  grid-template-columns: 1fr; /* rows stack */
-  gap: 12px;
-  padding: 10px 0;
+.list-grid{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:12px;
+  padding:10px 0;
 }
+.job-row{
+  display:grid;
+  grid-template-columns:92px 1fr auto; /* thumb | info | actions */
+  gap:12px;
+  align-items:center;
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:10px 12px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.08);
+}
+.job-row .thumb{
+  width:92px; height:92px;
+  border-radius:10px; overflow:hidden;
+  background:var(--accent-100);
+  display:flex; align-items:center; justify-content:center;
+  border:1px solid var(--line);
+}
+.job-row .thumb img{ width:100%; height:100%; object-fit:cover; }
+.job-row .info{ display:grid; grid-template-columns:1fr; row-gap:4px; min-width:0; }
+.job-row .title-line{ display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
+.job-row .title-line h3{ margin:0; font-size:16px; }
+.job-row .meta{
+  color:var(--muted); font-size:14px;
+  display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px 12px;
+}
+.job-row .actions{ display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
 
-.job-row {
-  display: grid;
-  grid-template-columns: 92px 1fr auto; /* thumb | info | actions */
-  gap: 12px;
-  align-items: center;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 10px 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-}
-
-.job-row .thumb {
-  width: 92px;
-  height: 92px;
-  border-radius: 10px;
-  overflow: hidden;
-  background: var(--accent-100);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--line);
-}
-.job-row .thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.job-row .info {
-  display: grid;
-  grid-template-columns: 1fr;
-  row-gap: 4px;
-  min-width: 0;
-}
-
-.job-row .title-line {
-  display: flex;
-  gap: 10px;
-  align-items: baseline;
-  flex-wrap: wrap;
-}
-.job-row .title-line h3 {
-  margin: 0;
-  font-size: 16px;
-}
-
-.job-row .meta {
-  color: var(--muted);
-  font-size: 14px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px 12px;
-}
-
-.job-row .actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-}
-
-/* Make the card grid switch off when list is on */
-.card-grid.list {
-  display: none;
-}
+/* Hide the card grid when list is enabled */
+.card-grid.list{ display:none; }
 
 /* =========================
    View width + columns
    ========================= */
 
-/* LIST VIEW: cap content to 70% of the viewport (but not wider than 1200px) */
-body.list-view .content {
-  display: flex;
-  justify-content: center;
-}
-body.list-view #jobGrid {
-  width: 70vw;           /* 70% of screen */
-  max-width: 1200px;     /* optional hard cap so it doesn’t get too wide on huge screens */
+/* LIST VIEW: cap content to 70% of viewport (max 1200px) and center it */
+body.list-view .content{ display:flex; justify-content:center; }
+body.list-view #jobGrid{
+  width:70vw;
+  max-width:1200px;
 }
 
-/* CARD VIEW: allow more than 5 across on very wide screens */
-body.card-view #jobGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); /* grows to 6,7,... on big screens */
-  gap: 24px;
+/* CARD VIEW:
+   - Always provide at least 5 card-widths of space (horizontal scroll if needed)
+   - On wider screens, allow more than 5 across automatically */
+body.card-view .content{ overflow-x:auto; }
+body.card-view #jobGrid{
+  display:grid;
+  /* min 260px card width, grows to fill; auto-fit lets it go 6,7,... on huge screens */
+  grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));
+  gap:24px;
+  /* Force enough width to hold 5 cards + 4 gaps (so it never collapses below 5) */
+  min-width: calc(5 * 260px + 4 * 24px); /* = 1396px */
 }
 
-/* CARD VIEW: never go below 5 across as the screen shrinks */
-@media (max-width: 1600px) {
-  body.card-view #jobGrid {
-    grid-template-columns: repeat(5, minmax(0, 1fr)); /* lock at 5 columns */
+/* Optional: if you want a bit more breathing room on truly massive screens,
+   you can increase the min card width above 260px with a media query: */
+@media (min-width: 2000px){
+  body.card-view #jobGrid{
+    grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));
+    min-width: calc(5 * 280px + 4 * 24px);
   }
-}
-
-/* (Optional) If the page ever gets narrower than what 5 columns can comfortably fit,
-   let the grid horizontally scroll instead of wrapping to fewer than 5. */
-@media (max-width: 1200px) {
-  body.card-view .content {
-    overflow-x: auto;
-  }
-  body.card-view #jobGrid {
-    min-width: 1100px; /* ~5 columns worth; adjust if your cards are wider/narrower */
-  }
-}
-
-/* LIST ROW THUMBNAIL: keep the picture reasonable in list mode */
-body.list-view .job-card.list-row .photo-container {
-  width: 140px;     /* small thumbnail */
-  height: 90px;     /* 16:10-ish */
-  flex: 0 0 140px;
-}
-
-/* Toggle view buttons (cards/list) */
-.view-toggle button {
-  background-color: #e5e5e5;  /* light gray by default */
-  color: #333;
-  border: 1px solid #ccc;
-  padding: 6px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background-color 0.2s ease, color 0.2s ease;
-}
-
-.view-toggle button:hover {
-  background-color: #d4d4d4;  /* slightly darker on hover */
-}
-
-.view-toggle button.active {
-  background-color: #555;     /* dark gray when clicked/active */
-  color: #fff;                /* white text for contrast */
-  border-color: #444;
 }
