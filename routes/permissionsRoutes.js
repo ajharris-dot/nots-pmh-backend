@@ -1,7 +1,7 @@
 // routes/permissionsRoutes.js
 const express = require('express');
 const router = express.Router();
-const db = require('../db'); // <- fix path/quotes
+const db = require('../models/db'); // 
 
 // GET /api/permissions  -> { roles:[...], abilities:[{id,ability}], mapping:{ role:[ability,...] } }
 router.get('/', async (_req, res) => {
