@@ -3,12 +3,15 @@ const express = require('express');
 const db = require('../models/db');
 const router = express.Router();
 
-// GET all permissions grouped by role (always include canonical roles)
+/**
+ * GET /api/permissions
+ * Always return the canonical role list with abilities (empty if none yet)
+ */
 router.get('/', async (_req, res) => {
   try {
     const { rows } = await db.query(`
-      WITH roles AS (
-        SELECT unnest(ARRAY['admin','employment','operations','manager','user']) AS role
+      WITH roles(role) AS (
+        VALUES ('admin'), ('employment'), ('operations'), ('manager'), ('user')
       )
       SELECT
         r.role,
@@ -29,12 +32,19 @@ router.get('/', async (_req, res) => {
   }
 });
 
+/**
+ * POST /api/permissions
+ * body: { role, ability }
+ */
 router.post('/', async (req, res) => {
-  const { role, ability } = req.body;
+  const { role, ability } = req.body || {};
   if (!role || !ability) return res.status(400).json({ error: 'missing role/ability' });
+
   try {
     await db.query(
-      'INSERT INTO role_permissions (role, ability_key) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      `INSERT INTO role_permissions (role, ability_key)
+       VALUES ($1, $2)
+       ON CONFLICT DO NOTHING`,
       [role, ability]
     );
     res.json({ ok: true });
@@ -44,12 +54,18 @@ router.post('/', async (req, res) => {
   }
 });
 
+/**
+ * DELETE /api/permissions
+ * body: { role, ability }
+ */
 router.delete('/', async (req, res) => {
-  const { role, ability } = req.body;
+  const { role, ability } = req.body || {};
   if (!role || !ability) return res.status(400).json({ error: 'missing role/ability' });
+
   try {
     await db.query(
-      'DELETE FROM role_permissions WHERE role = $1 AND ability_key = $2',
+      `DELETE FROM role_permissions
+       WHERE role = $1 AND ability_key = $2`,
       [role, ability]
     );
     res.json({ ok: true });
