@@ -85,6 +85,7 @@ button:disabled{ opacity:0.55; cursor:not-allowed; }
   display:grid;
   gap:24px;
   padding:10px 0;
+  grid-template-colums: repeat(5, minmax(0,1fr)); }
 }
 
 /* ===== CARD VIEW: never fewer than 5 columns ===== */
