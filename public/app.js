@@ -695,6 +695,19 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   closeAdminHubBtn?.addEventListener('click', closeAdminHub);
 
+  // Close when clicking the backdrop
+  adminHubModal?.addEventListener('click', (e) => {
+    if (e.target === adminHubModal) closeAdminHub();
+  });
+
+  // Close on Escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !adminHubModal?.classList.contains('hidden')) {
+      closeAdminHub();
+    }
+  });
+
+
   // ---- Permissions ----
   async function loadPermissions() {
     if (!isAuthed() || CURRENT_USER?.role !== 'admin') return;
