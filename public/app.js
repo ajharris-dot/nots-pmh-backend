@@ -50,7 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const userPasswordEl = document.getElementById('userPassword');
 
   // Permissions sub-section
-  const permissionsList = document.getElementById('permissionsList');
+  const permissionsList = document.getElementById('permissionsList'); // (fixed: single declaration)
 
   // View toggle buttons
   const cardViewBtn = document.getElementById('cardViewBtn');
@@ -158,9 +158,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (VIEW_MODE === 'list') {
       cardViewBtn?.classList.remove('active');
       listViewBtn?.classList.add('active');
+      document.body.classList.add('list-view');
+      document.body.classList.remove('card-view');
     } else {
       listViewBtn?.classList.remove('active');
       cardViewBtn?.classList.add('active');
+      document.body.classList.add('card-view');
+      document.body.classList.remove('list-view');
     }
   }
   cardViewBtn?.addEventListener('click', () => {
@@ -722,7 +726,7 @@ document.addEventListener('DOMContentLoaded', () => {
       enabled[ra.role][ra.ability] = true;
     });
 
-    // Table-like layout
+    // Table
     const wrap = document.createElement('div');
     wrap.style.display = 'grid';
     wrap.style.gridTemplateColumns = `200px repeat(${roles.length}, 1fr)`;
@@ -777,23 +781,25 @@ document.addEventListener('DOMContentLoaded', () => {
   async function onToggleAbility(e) {
     const role = e.target.dataset.role;
     const ability = e.target.dataset.ability;
-    const enabled = e.target.checked;
+    const nowChecked = e.target.checked;
+
     e.target.disabled = true;
     try {
+      // Prefer POST to add, DELETE to remove
+      const method = nowChecked ? 'POST' : 'DELETE';
       const res = await authFetch(PERMS, {
-        method: 'POST',
+        method,
         headers: { 'Content-Type':'application/json' },
-        body: JSON.stringify({ role, ability, enabled })
+        body: JSON.stringify({ role, ability })
       });
       if (!res.ok) {
         const t = await res.text().catch(()=> '');
-        alert(`Update failed: ${t || res.status}`);
-        e.target.checked = !enabled; // revert
+        throw new Error(`HTTP ${res.status}: ${t}`);
       }
     } catch (err) {
       console.error('toggle ability error:', err);
-      alert('Update failed (network).');
-      e.target.checked = !enabled; // revert
+      alert('Update failed.');
+      e.target.checked = !nowChecked; // revert on error
     } finally {
       e.target.disabled = false;
     }
