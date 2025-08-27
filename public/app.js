@@ -5,6 +5,7 @@ fetch('/api/jobs').then(r=>r.text()).then(t=>console.log('/api/jobs sample:', t.
 const API = '/api/jobs';
 const AUTH = '/api/auth';
 const USERS = '/api/users';
+const PERMS = '/api/permissions';
 const PLACEHOLDER = './placeholder-v2.png?v=20250814';
 const TOKEN_KEY = 'authToken';
 
@@ -33,10 +34,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const loginForm = document.getElementById('loginForm');
   const cancelLogin = document.getElementById('cancelLogin');
 
-  // Admin users portal UI
-  const manageUsersBtn = document.getElementById('manageUsersBtn');
-  const usersModal = document.getElementById('usersModal');
-  const closeUsersModalBtn = document.getElementById('closeUsersModal');
+  // ---- Admin Hub (users + permissions) ----
+  const adminHubBtn = document.getElementById('adminHubBtn');
+  const adminHubModal = document.getElementById('adminHubModal');
+  const closeAdminHubBtn = document.getElementById('closeAdminHub');
+
+  // Users sub-section
   const userForm = document.getElementById('userForm');
   const resetUserFormBtn = document.getElementById('resetUserForm');
   const usersList = document.getElementById('usersList');
@@ -45,6 +48,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const userNameEl = document.getElementById('userName');
   const userRoleEl = document.getElementById('userRole');
   const userPasswordEl = document.getElementById('userPassword');
+
+  // Permissions sub-section
+  const permissionsList = document.getElementById('permissionsList');
 
   // View toggle buttons
   const cardViewBtn = document.getElementById('cardViewBtn');
@@ -119,7 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateUIAuth() {
     const authed = isAuthed();
 
-    // header auth buttons
+    // auth buttons
     if (authed) {
       loginBtn?.setAttribute('style', 'display:none');
       logoutBtn?.setAttribute('style', '');
@@ -137,14 +143,14 @@ document.addEventListener('DOMContentLoaded', () => {
       addJobBtn?.setAttribute('style', 'display:none');
     }
 
-    // Admin-only Manage Users button
+    // Admin-only Admin Hub button
     if (authed && CURRENT_USER?.role === 'admin') {
-      manageUsersBtn?.setAttribute('style', '');
+      adminHubBtn?.setAttribute('style', '');
     } else {
-      manageUsersBtn?.setAttribute('style', 'display:none');
+      adminHubBtn?.setAttribute('style', 'display:none');
     }
 
-    render(); // re-render cards/rows so per-item actions match permissions
+    render(); // re-render UI actions per role
   }
 
   /* ------- View toggle helpers ------- */
@@ -469,7 +475,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (action === 'open-login') { openLoginModal(); return; }
 
     if (action === 'trigger-upload') {
-      if (!isAuthed() || !(CURRENT_USER?.role === 'admin' || CURRENT_USER?.role === 'employment')) { openLoginModal(); return; }
+      const role = CURRENT_USER?.role;
+      if (!isAuthed() || !(role === 'admin' || role === 'employment')) { openLoginModal(); return; }
       const input = document.getElementById(e.target.dataset.input);
       if (input) input.click();
       return;
@@ -554,16 +561,18 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /* =========================
-     ADMIN: Users management
+     ADMIN HUB
      ========================= */
-  function openUsersModal() {
-    usersModal?.classList.remove('hidden');
+  function openAdminHub() {
+    adminHubModal?.classList.remove('hidden');
     resetUserForm();
     loadUsers();
+    loadPermissions();
   }
-  function closeUsersModal() { usersModal?.classList.add('hidden'); }
+  function closeAdminHub() { adminHubModal?.classList.add('hidden'); }
   function resetUserForm() { userForm?.reset(); if (userIdEl) userIdEl.value = ''; }
 
+  // ---- Users ----
   async function loadUsers() {
     if (!isAuthed() || CURRENT_USER?.role !== 'admin') return;
     try {
@@ -676,11 +685,119 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   resetUserFormBtn?.addEventListener('click', resetUserForm);
-  manageUsersBtn?.addEventListener('click', () => {
+  adminHubBtn?.addEventListener('click', () => {
     if (CURRENT_USER?.role !== 'admin') return;
-    openUsersModal();
+    openAdminHub();
   });
-  closeUsersModalBtn?.addEventListener('click', closeUsersModal);
+  closeAdminHubBtn?.addEventListener('click', closeAdminHub);
+
+  // ---- Permissions ----
+  async function loadPermissions() {
+    if (!isAuthed() || CURRENT_USER?.role !== 'admin') return;
+    try {
+      const res = await authFetch(PERMS, { method: 'GET' });
+      if (!res.ok) {
+        const t = await res.text().catch(()=> '');
+        permissionsList.innerHTML = `<div style="color:#b91c1c">Error loading permissions: ${t || res.status}</div>`;
+        return;
+      }
+      const data = await res.json(); // { roles:[], abilities:[], role_abilities:[] }
+      renderPermissions(data);
+    } catch (e) {
+      console.error('loadPermissions error:', e);
+      permissionsList.innerHTML = `<div style="color:#b91c1c">Error loading permissions (network/JS)</div>`;
+    }
+  }
+
+  function renderPermissions({ roles = [], abilities = [], role_abilities = [] }) {
+    if (!roles.length || !abilities.length) {
+      permissionsList.innerHTML = `<div style="color:#6b7280">No roles/abilities found.</div>`;
+      return;
+    }
+
+    // Build a quick lookup: enabled[role][ability] = true
+    const enabled = {};
+    role_abilities.forEach(ra => {
+      if (!enabled[ra.role]) enabled[ra.role] = {};
+      enabled[ra.role][ra.ability] = true;
+    });
+
+    // Table-like layout
+    const wrap = document.createElement('div');
+    wrap.style.display = 'grid';
+    wrap.style.gridTemplateColumns = `200px repeat(${roles.length}, 1fr)`;
+    wrap.style.gap = '8px';
+    wrap.style.alignItems = 'center';
+
+    // Header row
+    wrap.appendChild(hcell('Ability'));
+    roles.forEach(r => wrap.appendChild(hcell(cap(r))));
+
+    // Ability rows
+    abilities.forEach(ability => {
+      wrap.appendChild(ccell(ability));
+      roles.forEach(role => {
+        const checked = !!enabled[role]?.[ability];
+        const box = document.createElement('input');
+        box.type = 'checkbox';
+        box.checked = checked;
+        box.dataset.role = role;
+        box.dataset.ability = ability;
+        box.addEventListener('change', onToggleAbility);
+        const holder = document.createElement('div');
+        holder.style.display = 'flex';
+        holder.style.justifyContent = 'center';
+        holder.appendChild(box);
+        wrap.appendChild(holder);
+      });
+    });
+
+    permissionsList.innerHTML = '';
+    permissionsList.appendChild(wrap);
+
+    function hcell(text) {
+      const d = document.createElement('div');
+      d.textContent = text;
+      d.style.fontWeight = '700';
+      d.style.borderBottom = '1px solid var(--line)';
+      d.style.padding = '6px 4px';
+      d.style.textAlign = text === 'Ability' ? 'left' : 'center';
+      return d;
+    }
+    function ccell(text) {
+      const d = document.createElement('div');
+      d.textContent = text;
+      d.style.padding = '6px 4px';
+      d.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, monospace';
+      return d;
+    }
+    function cap(s){ return String(s || '').replace(/^\w/, c => c.toUpperCase()); }
+  }
+
+  async function onToggleAbility(e) {
+    const role = e.target.dataset.role;
+    const ability = e.target.dataset.ability;
+    const enabled = e.target.checked;
+    e.target.disabled = true;
+    try {
+      const res = await authFetch(PERMS, {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify({ role, ability, enabled })
+      });
+      if (!res.ok) {
+        const t = await res.text().catch(()=> '');
+        alert(`Update failed: ${t || res.status}`);
+        e.target.checked = !enabled; // revert
+      }
+    } catch (err) {
+      console.error('toggle ability error:', err);
+      alert('Update failed (network).');
+      e.target.checked = !enabled; // revert
+    } finally {
+      e.target.disabled = false;
+    }
+  }
 
   // Upload change -> patch job (guarded)
   const jobGridChange = async (e) => {
@@ -710,7 +827,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* init */
   (async () => {
-    // keep the last chosen view
     syncViewToggle();
     await fetchMe();
     updateUIAuth();

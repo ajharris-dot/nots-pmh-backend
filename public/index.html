@@ -6,7 +6,7 @@
   <title>Positions Hub</title>
   <link rel="stylesheet" href="styles.css"/>
 </head>
-<body>
+<body class="card-view">
   <header class="topbar">
     <h1>Positions Hub</h1>
 
@@ -25,14 +25,15 @@
       <button id="loginBtn" class="secondary">Log In</button>
       <button id="logoutBtn" class="secondary" style="display:none">Log Out</button>
 
-      <!-- Admin-only control (shown by app.js when role === 'admin') -->
+      <!-- Admin-only controls (shown by app.js when role === 'admin') -->
+      <button id="adminHubBtn" class="secondary" style="display:none">Admin Hub</button>
+      <!-- Fallback for older JS that still references manageUsersBtn -->
       <button id="manageUsersBtn" class="secondary" style="display:none">Manage Users</button>
 
       <div class="view-toggle" role="group" aria-label="View toggle">
         <button id="cardViewBtn" class="secondary active">Cards</button>
         <button id="listViewBtn" class="secondary">List</button>
       </div>
-
 
       <button id="addJobBtn" class="primary">+ Add Position</button>
     </div>
@@ -44,7 +45,7 @@
       <input id="search" placeholder="Search job # / title / department" />
     </div>
 
-    <!-- Cards -->
+    <!-- Cards/List container (JS swaps layout) -->
     <div id="jobGrid" class="card-grid"></div>
   </main>
 
@@ -67,7 +68,6 @@
           <input type="text" id="department" required />
         </label>
 
-        <!-- Renamed from Due Date -> Filled Date -->
         <label>Filled Date
           <input type="date" id="dueDate" />
         </label>
@@ -120,50 +120,70 @@
     </div>
   </div>
 
-  <!-- Admin: Manage Users Modal -->
-  <div id="usersModal" class="modal hidden" aria-hidden="true">
-    <div class="modal-card" style="width:min(720px,95vw)">
-      <h2>Manage Users</h2>
+  <!-- Admin Hub (Users + Role Permissions) -->
+  <div id="adminHubModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-card" style="width:min(900px,95vw)">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+        <h2 style="margin:0;">Admin Hub</h2>
+        <!-- NOTE: id is 'closeUsersModal' to match current app.js variable -->
+        <button id="closeUsersModal" class="secondary">Close</button>
+      </div>
 
-      <!-- Create / Edit form -->
-      <form id="userForm">
-        <input type="hidden" id="userId" />
+      <!-- USERS SECTION -->
+      <section style="margin-top:16px;">
+        <h3 style="margin:0 0 8px 0;">Users</h3>
 
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-          <label>Email
-            <input type="email" id="userEmail" required />
-          </label>
-          <label>Name
-            <input type="text" id="userName" />
-          </label>
-          <label>Role
-            <select id="userRole" required>
-              <option value="admin">Admin</option>
-              <option value="employment">Employment</option>
-              <option value="operations">Operations</option>
-              <option value="manager">Manager</option>
-              <option value="user">User</option>
-            </select>
-          </label>
-          <label>Password
-            <input type="password" id="userPassword" placeholder="Set or change password" />
-          </label>
+        <!-- Create / Edit form -->
+        <form id="userForm">
+          <input type="hidden" id="userId" />
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+            <label>Email
+              <input type="email" id="userEmail" required />
+            </label>
+            <label>Name
+              <input type="text" id="userName" />
+            </label>
+            <label>Role
+              <select id="userRole" required>
+                <option value="admin">Admin</option>
+                <option value="employment">Employment</option>
+                <option value="operations">Operations</option>
+                <option value="manager">Manager</option>
+                <option value="user">User</option>
+              </select>
+            </label>
+            <label>Password
+              <input type="password" id="userPassword" placeholder="Set or change password" />
+            </label>
+          </div>
+
+          <div class="modal-actions">
+            <button type="submit" class="primary">Save User</button>
+            <button type="button" id="resetUserForm" class="secondary">New</button>
+          </div>
+        </form>
+
+        <!-- Users list -->
+        <div style="margin-top:12px;">
+          <h4 style="margin:0 0 8px 0;">Existing Users</h4>
+          <div id="usersList" style="max-height:300px; overflow:auto; border:1px solid var(--line); border-radius:8px; padding:8px;">
+            <!-- populated by app.js -->
+          </div>
         </div>
+      </section>
 
-        <div class="modal-actions">
-          <button type="submit" class="primary">Save User</button>
-          <button type="button" id="resetUserForm" class="secondary">New</button>
-          <button type="button" id="closeUsersModal" class="secondary">Close</button>
-        </div>
-      </form>
+      <hr style="margin:18px 0; border:none; border-top:1px solid var(--line);" />
 
-      <!-- Users list -->
-      <div style="margin-top:16px;">
-        <h3 style="margin:0 0 8px 0;">Existing Users</h3>
-        <div id="usersList" style="max-height:300px; overflow:auto; border:1px solid var(--line); border-radius:8px; padding:8px;">
+      <!-- ROLE PERMISSIONS SECTION -->
+      <section>
+        <h3 style="margin:0 0 8px 0;">Role Permissions</h3>
+        <p style="margin:0 0 10px 0; color:var(--muted); font-size:14px;">
+          Add or remove abilities assigned to each role. Changes take effect immediately.
+        </p>
+        <div id="permissionsList" style="display:grid; gap:12px;">
           <!-- populated by app.js -->
         </div>
-      </div>
+      </section>
     </div>
   </div>
 

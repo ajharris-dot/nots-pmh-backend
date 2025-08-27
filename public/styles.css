@@ -84,14 +84,12 @@ button:disabled{ opacity:0.55; cursor:not-allowed; }
 
 /* =========================
    CARD GRID (responsive)
-   =========================
-   Automatically flows to 1, 2, 3… columns based on space.
-   No hard minimum/maximum. */
+   ========================= */
 .card-grid{
   display:grid;
   gap:24px;
   padding:10px 0;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); /* ← the key line */
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
 /* Job card */
@@ -135,14 +133,15 @@ button:disabled{ opacity:0.55; cursor:not-allowed; }
   display:flex; align-items:center; justify-content:center; z-index:1000;
 }
 .modal-card{
-  width:min(520px,95vw); background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px;
+  width:min(900px,95vw); /* wider by default to fit Admin Hub */
+  background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px;
   box-shadow:0 10px 30px rgba(0,0,0,0.2);
 }
 .modal-card h2{ margin:0 0 12px 0; }
 
 /* Modal form styles (all modals) */
 .modal-card label{ display:block; font-weight:600; margin:10px 0 4px 0; }
-.modal-card input, .modal-card select{
+.modal-card input, .modal-card select, .modal-card textarea{
   width:100%; border:1px solid var(--line); border-radius:8px; padding:10px 12px; outline:none;
 }
 .modal-actions{ display:flex; gap:10px; margin-top:14px; justify-content:flex-end; }
@@ -166,7 +165,7 @@ button:disabled{ opacity:0.55; cursor:not-allowed; }
 /* Bigger filter tabs */
 .filters .tab { padding: 8px 14px; font-size: 14px; line-height: 1.1; }
 
-/* Users list row (admin modal) */
+/* Users list row (admin users list) */
 .users-row {
   display: grid;
   grid-template-columns:2fr 1.5fr 1fr auto;
@@ -177,7 +176,7 @@ button:disabled{ opacity:0.55; cursor:not-allowed; }
 }
 
 /* =========================
-   LIST VIEW (optional)
+   LIST VIEW
    ========================= */
 .list-grid{
   display:grid;
@@ -213,5 +212,76 @@ button:disabled{ opacity:0.55; cursor:not-allowed; }
 }
 .job-row .actions{ display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
 
-/* Hide the card grid when list is enabled (your JS can toggle this class) */
+/* Hide card grid when list is enabled (if you ever toggle this class) */
 .card-grid.list{ display:none; }
+
+/* =========================
+   ADMIN HUB
+   ========================= */
+
+/* Make Admin Hub modal a bit larger than edit/login */
+#adminHubModal .modal-card{
+  width:min(1100px,95vw);
+}
+
+/* Admin sections layout: two columns on wide screens, stack on small */
+.admin-sections{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap:16px;
+}
+@media (min-width: 980px){
+  .admin-sections{ grid-template-columns: 1fr 1fr; }
+}
+
+.section-card{
+  border:1px solid var(--line);
+  background:var(--panel);
+  border-radius:12px;
+  padding:12px;
+  box-shadow:0 2px 10px rgba(0,0,0,0.06);
+}
+.section-card h3{
+  margin:0 0 8px 0;
+  font-size:16px;
+}
+
+/* Users list box inside Admin Hub */
+#usersList{
+  max-height:320px;
+  overflow:auto;
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:8px;
+  background:#fff;
+}
+
+/* Permissions grid table */
+.permissions-grid{
+  display:grid;
+  gap:8px;
+}
+.permissions-grid .pg-header{
+  display:grid;
+  grid-template-columns: 200px repeat(auto-fit, minmax(90px,1fr));
+  gap:8px;
+  font-weight:700;
+  border-bottom:1px solid var(--line);
+  padding-bottom:6px;
+}
+.permissions-grid .pg-row{
+  display:grid;
+  grid-template-columns: 200px repeat(auto-fit, minmax(90px,1fr));
+  gap:8px;
+  align-items:center;
+}
+.permissions-grid .pg-ability{
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding:6px 4px;
+}
+.permissions-grid .pg-cell{
+  display:flex; align-items:center; justify-content:center;
+}
+
+/* Small helper styles for inline notes/empty states */
+.muted { color: var(--muted); }
