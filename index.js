@@ -11,6 +11,8 @@ const jobRoutes = require('./routes/jobRoutes');
 const usersRoutes = require('./routes/usersRoutes');
 const authMiddleware = require('./middleware/authMiddleware');
 
+const permissionsRoutes = require('./routes/permissionsRoutes');
+
 const app = express();
 
 /* ---------- Uploads setup ---------- */
@@ -94,6 +96,8 @@ app.use('/api/jobs', jobRoutes);
 
 // Admin-only Users portal
 app.use('/api/users', authMiddleware, authorizeRoles('admin'), usersRoutes);
+
+app.use('/api/permissions', authMiddleware, authorizeRoles('admin'), permissionsRoutes);
 
 // Protected upload (admins + employment can upload photos)
 app.post(

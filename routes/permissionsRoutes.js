@@ -1,76 +1,83 @@
 // routes/permissionsRoutes.js
 const express = require('express');
 const router = express.Router();
-const db = require('../models/db'); // 
 
-// GET /api/permissions  -> { roles:[...], abilities:[{id,ability}], mapping:{ role:[ability,...] } }
+// Pick ONE of these depending on where your db helper lives:
+// const db = require('../db');            // if you created /src/db.js
+const db = require('../models/db');       // if your helper is /src/models/db.js
+
+// GET all permissions grouped by role + list of roles + abilities
 router.get('/', async (_req, res) => {
   try {
-    const { rows: abilities } = await db.query(
-      'SELECT id, ability FROM abilities ORDER BY ability ASC;'
+    const rolesRes = await db.query(
+      'SELECT role FROM roles ORDER BY role'
+    );
+    const abRes = await db.query(
+      'SELECT ability_key AS ability FROM abilities ORDER BY ability_key'
+    );
+    const mapRes = await db.query(
+      `SELECT role, array_agg(ability_key ORDER BY ability_key) AS abilities
+         FROM role_permissions
+        GROUP BY role
+        ORDER BY role`
     );
 
-    // enum roles
-    const { rows: roles } = await db.query(
-      "SELECT unnest(enum_range(NULL::user_role))::text AS role;"
-    );
+    const roles = rolesRes.rows.map(r => r.role);
+    const abilities = abRes.rows.map(r => ({ ability: r.ability }));
+    const mapping = {};
+    for (const r of mapRes.rows) mapping[r.role] = r.abilities || [];
 
-    const { rows: mappings } = await db.query(
-      `SELECT r.role::text AS role, a.ability
-         FROM role_abilities r
-         JOIN abilities a ON a.id = r.ability_id
-         ORDER BY r.role, a.ability;`
-    );
-
-    const map = {};
-    roles.forEach(r => { map[r.role] = []; });
-    mappings.forEach(m => map[m.role].push(m.ability));
-
-    res.json({ roles: roles.map(r => r.role), abilities, mapping: map });
+    res.json({ roles, abilities, mapping });
   } catch (err) {
-    console.error('GET /api/permissions error:', err);
-    res.status(500).json({ error: 'server error' });
+    console.error('permissions GET error:', err);
+    res.status(500).json({ error: 'db error' });
   }
 });
 
-// POST /api/permissions  { role, ability }
+// POST /api/permissions  { role, ability }  -> grant
 router.post('/', async (req, res) => {
   const { role, ability } = req.body || {};
-  if (!role || !ability) return res.status(400).json({ error: 'role and ability required' });
-
+  if (!role || !ability) return res.status(400).json({ error: 'missing role/ability' });
   try {
-    const { rows } = await db.query('SELECT id FROM abilities WHERE ability=$1;', [ability]);
-    if (!rows.length) return res.status(400).json({ error: 'unknown ability' });
-
     await db.query(
-      'INSERT INTO role_abilities (role, ability_id) VALUES ($1::user_role, $2) ON CONFLICT DO NOTHING;',
-      [role, rows[0].id]
+      `INSERT INTO role_permissions (role, ability_key)
+       VALUES ($1, $2)
+       ON CONFLICT DO NOTHING`,
+      [role, ability]
     );
-    res.status(201).json({ ok: true });
+    res.json({ ok: true });
   } catch (err) {
-    console.error('POST /api/permissions error:', err);
-    res.status(500).json({ error: 'server error' });
+    console.error('permissions POST error:', err);
+    res.status(500).json({ error: 'db error' });
   }
 });
 
-// DELETE /api/permissions  { role, ability }
+// DELETE /api/permissions  { role, ability } -> revoke
 router.delete('/', async (req, res) => {
   const { role, ability } = req.body || {};
-  if (!role || !ability) return res.status(400).json({ error: 'role and ability required' });
-
+  if (!role || !ability) return res.status(400).json({ error: 'missing role/ability' });
   try {
-    const { rows } = await db.query('SELECT id FROM abilities WHERE ability=$1;', [ability]);
-    if (!rows.length) return res.status(400).json({ error: 'unknown ability' });
-
-    const r = await db.query(
-      'DELETE FROM role_abilities WHERE role=$1::user_role AND ability_id=$2;',
-      [role, rows[0].id]
+    await db.query(
+      `DELETE FROM role_permissions
+        WHERE role = $1 AND ability_key = $2`,
+      [role, ability]
     );
-    res.json({ ok: true, deleted: r.rowCount });
+    res.json({ ok: true });
   } catch (err) {
-    console.error('DELETE /api/permissions error:', err);
-    res.status(500).json({ error: 'server error' });
+    console.error('permissions DELETE error:', err);
+    res.status(500).json({ error: 'db error' });
   }
+});
+
+// OPTIONAL aliases: POST /grant and POST /revoke
+router.post('/grant', async (req, res) => {
+  req.body && (req.method = 'POST'); // noop, just forward
+  return router.handle(req, res);
+});
+router.post('/revoke', async (req, res) => {
+  // Simulate DELETE with body
+  req.method = 'DELETE';
+  return router.handle(req, res);
 });
 
 module.exports = router;
