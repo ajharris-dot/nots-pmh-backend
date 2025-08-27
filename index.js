@@ -97,6 +97,7 @@ app.use('/api/jobs', jobRoutes);
 // Admin-only Users portal
 app.use('/api/users', authMiddleware, authorizeRoles('admin'), usersRoutes);
 
+// Admin-only Permissions 
 app.use('/api/permissions', authMiddleware, authorizeRoles('admin'), permissionsRoutes);
 
 // Protected upload (admins + employment can upload photos)
@@ -135,9 +136,4 @@ app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
 
-/* ---------- Profile Permissions ---------- */
-
-const permissionsRoutes = require('./routes/permissionsRoutes');
-
-app.use('/api/permissions', authMiddleware, authorizeRoles('admin'), permissionsRoutes);
 
