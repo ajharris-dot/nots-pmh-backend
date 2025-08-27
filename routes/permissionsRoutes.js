@@ -1,5 +1,5 @@
 const express = require('express');
-const pool = require('../db'); // adjust if your db client is in another file
+const db = require('../models/db');
 const router = express.Router();
 
 // GET all permissions grouped by role
