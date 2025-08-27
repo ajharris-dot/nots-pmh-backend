@@ -19,7 +19,6 @@ let VIEW_MODE = (localStorage.getItem(VIEW_KEY) || 'card'); // 'card' | 'list'
 document.addEventListener('DOMContentLoaded', () => {
   const jobGrid = document.getElementById('jobGrid');
   const addJobBtn = document.getElementById('addJobBtn');
-  const refreshBtn = document.getElementById('refresh');
   const search = document.getElementById('search');
 
   const jobModal = document.getElementById('jobModal');
@@ -418,7 +417,6 @@ document.addEventListener('DOMContentLoaded', () => {
     openModal();
   });
   cancelModal?.addEventListener('click', closeModal);
-  refreshBtn?.addEventListener('click', loadJobs);
   search?.addEventListener('input', render);
 
   /* ------ Login / Logout ------ */
@@ -718,4 +716,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateUIAuth();
     loadJobs();
   })();
+
+  /* Optional auto-refresh every 60 seconds */
+  setInterval(loadJobs, 60000);
 });
