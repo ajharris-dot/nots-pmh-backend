@@ -1,21 +1,25 @@
 // routes/candidatesRoutes.js
 const express = require('express');
-const db = require('../models/db'); // <-- IMPORTANT: matches your db.js export
+const db = require('../models/db');
 const router = express.Router();
 
-/**
- * Allowed pipeline statuses (enforced in DB with CHECK too)
- */
+// Acceptable statuses (DB has a CHECK for these)
 const ALLOWED = new Set([
-  'pending pre-employment',
-  'pending onboarding',
-  'offer extended',
-  'ready to start',
+  'pending_pre_employment',
+  'pending_onboarding',
+  'offer_extended',
+  'ready_to_start',
   'hired',
-  'did not start',
+  'did_not_start'
 ]);
 
-// GET /api/candidates
+const normStatus = (s) =>
+  String(s || '')
+    .toLowerCase()
+    .replace(/[-\s]+/g, '_') // spaces & hyphens -> underscore
+    .trim();
+
+// GET all candidates (newest first)
 router.get('/', async (_req, res) => {
   try {
     const { rows } = await db.query(
@@ -30,62 +34,75 @@ router.get('/', async (_req, res) => {
   }
 });
 
-// POST /api/candidates
+// CREATE
 router.post('/', async (req, res) => {
   try {
-    const { full_name, email = null, phone = null, status, notes = null } = req.body || {};
+    const full_name = (req.body.full_name || '').trim();
+    const status = normStatus(req.body.status);
 
-    if (!full_name || !status) {
-      return res.status(400).json({ error: 'full_name and status are required' });
-    }
-    if (!ALLOWED.has(String(status).toLowerCase())) {
-      return res.status(400).json({ error: 'invalid status' });
-    }
+    if (!full_name) return res.status(400).json({ error: 'full_name is required' });
+    if (!ALLOWED.has(status)) return res.status(400).json({ error: 'invalid status' });
+
+    const email = req.body.email ?? null;
+    const phone = req.body.phone ?? null;
+    const notes = req.body.notes ?? null;
 
     const { rows } = await db.query(
       `INSERT INTO candidates (full_name, email, phone, status, notes)
-       VALUES ($1, $2, $3, $4, $5)
+       VALUES ($1,$2,$3,$4,$5)
        RETURNING id, full_name, email, phone, status, notes, created_at, updated_at`,
-      [full_name, email, phone, status.toLowerCase(), notes]
+      [full_name, email, phone, status, notes]
     );
-
     res.json(rows[0]);
   } catch (err) {
-    console.error('POST /api/candidates error:', err); // will show the real PG error in server logs
+    console.error('POST /api/candidates error:', err);
     res.status(500).json({ error: 'db error' });
   }
 });
 
-// PATCH /api/candidates/:id
+// UPDATE
 router.patch('/:id', async (req, res) => {
   try {
-    const id = Number(req.params.id);
-    if (!id) return res.status(400).json({ error: 'invalid id' });
+    const id = req.params.id;
 
+    // Build dynamic update list
     const fields = [];
     const values = [];
-    let i = 1;
+    let idx = 1;
 
-    const add = (col, val) => { fields.push(`${col} = $${i++}`); values.push(val); };
-
-    if (req.body.full_name != null) add('full_name', req.body.full_name);
-    if (req.body.email != null)     add('email', req.body.email);
-    if (req.body.phone != null)     add('phone', req.body.phone);
-    if (req.body.notes != null)     add('notes', req.body.notes);
-
-    if (req.body.status != null) {
-      const st = String(req.body.status).toLowerCase();
-      if (!ALLOWED.has(st)) return res.status(400).json({ error: 'invalid status' });
-      add('status', st);
+    if (req.body.full_name !== undefined) {
+      fields.push(`full_name = $${idx++}`);
+      values.push((req.body.full_name || '').trim());
+    }
+    if (req.body.email !== undefined) {
+      fields.push(`email = $${idx++}`);
+      values.push(req.body.email || null);
+    }
+    if (req.body.phone !== undefined) {
+      fields.push(`phone = $${idx++}`);
+      values.push(req.body.phone || null);
+    }
+    if (req.body.status !== undefined) {
+      const s = normStatus(req.body.status);
+      if (!ALLOWED.has(s)) return res.status(400).json({ error: 'invalid status' });
+      fields.push(`status = $${idx++}`);
+      values.push(s);
+    }
+    if (req.body.notes !== undefined) {
+      fields.push(`notes = $${idx++}`);
+      values.push(req.body.notes || null);
     }
 
-    if (!fields.length) return res.status(400).json({ error: 'no fields' });
+    if (!fields.length) return res.status(400).json({ error: 'no fields to update' });
 
-    // updated_at auto-updates via trigger, but we can also set it explicitly if you prefer
-    const sql = `UPDATE candidates SET ${fields.join(', ')} WHERE id = $${i} RETURNING *`;
     values.push(id);
-
-    const { rows } = await db.query(sql, values);
+    const { rows } = await db.query(
+      `UPDATE candidates
+         SET ${fields.join(', ')}, updated_at = NOW()
+       WHERE id = $${idx}
+       RETURNING id, full_name, email, phone, status, notes, created_at, updated_at`,
+      values
+    );
     if (!rows.length) return res.status(404).json({ error: 'not found' });
     res.json(rows[0]);
   } catch (err) {
@@ -94,12 +111,10 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/candidates/:id
+// DELETE
 router.delete('/:id', async (req, res) => {
   try {
-    const id = Number(req.params.id);
-    if (!id) return res.status(400).json({ error: 'invalid id' });
-    const { rowCount } = await db.query('DELETE FROM candidates WHERE id = $1', [id]);
+    const { rowCount } = await db.query('DELETE FROM candidates WHERE id = $1', [req.params.id]);
     if (!rowCount) return res.status(404).json({ error: 'not found' });
     res.json({ ok: true });
   } catch (err) {
