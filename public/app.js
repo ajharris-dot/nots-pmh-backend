@@ -17,6 +17,10 @@ let CURRENT_USER = null; // { id, email, name, role } or null
 const VIEW_KEY = 'pmhViewMode';
 let VIEW_MODE = (localStorage.getItem(VIEW_KEY) || 'card'); // 'card' | 'list'
 
+// ---- Admin Hub permission state ----
+let PERM_STATE = { roles: [], abilities: [], role_abilities: [] };
+let CURRENT_ROLE_SEL = null;
+
 document.addEventListener('DOMContentLoaded', () => {
   const jobGrid = document.getElementById('jobGrid');
   const addJobBtn = document.getElementById('addJobBtn');
@@ -38,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const adminHubBtn = document.getElementById('adminHubBtn');
   const adminHubModal = document.getElementById('adminHubModal');
   const closeAdminHubBtn = document.getElementById('closeAdminHub');
+  const permissionsList = document.getElementById('permissionsList');
 
   // Users sub-section
   const userForm = document.getElementById('userForm');
@@ -48,9 +53,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const userNameEl = document.getElementById('userName');
   const userRoleEl = document.getElementById('userRole');
   const userPasswordEl = document.getElementById('userPassword');
-
-  // Permissions sub-section
-  const permissionsList = document.getElementById('permissionsList'); // (fixed: single declaration)
 
   // View toggle buttons
   const cardViewBtn = document.getElementById('cardViewBtn');
@@ -105,6 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!role) return false;
     if (role === 'admin') return true;
 
+    // NOTE: these remain hard-coded for now; the Admin Hub updates server data.
     const EMPLOYMENT = ['assign', 'unassign', 'upload_photo'];
     const OPERATIONS = ['create_job', 'edit_job', 'delete_job'];
     if (role === 'employment') return EMPLOYMENT.includes(action);
@@ -158,13 +161,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (VIEW_MODE === 'list') {
       cardViewBtn?.classList.remove('active');
       listViewBtn?.classList.add('active');
-      document.body.classList.add('list-view');
-      document.body.classList.remove('card-view');
     } else {
       listViewBtn?.classList.remove('active');
       cardViewBtn?.classList.add('active');
-      document.body.classList.add('card-view');
-      document.body.classList.remove('list-view');
     }
   }
   cardViewBtn?.addEventListener('click', () => {
@@ -576,6 +575,17 @@ document.addEventListener('DOMContentLoaded', () => {
   function closeAdminHub() { adminHubModal?.classList.add('hidden'); }
   function resetUserForm() { userForm?.reset(); if (userIdEl) userIdEl.value = ''; }
 
+  // Close admin hub: button, backdrop, Esc
+  closeAdminHubBtn?.addEventListener('click', closeAdminHub);
+  adminHubModal?.addEventListener('click', (e) => {
+    if (e.target === adminHubModal) closeAdminHub();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !adminHubModal?.classList.contains('hidden')) {
+      closeAdminHub();
+    }
+  });
+
   // ---- Users ----
   async function loadUsers() {
     if (!isAuthed() || CURRENT_USER?.role !== 'admin') return;
@@ -693,22 +703,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (CURRENT_USER?.role !== 'admin') return;
     openAdminHub();
   });
-  closeAdminHubBtn?.addEventListener('click', closeAdminHub);
 
-  // Close when clicking the backdrop
-  adminHubModal?.addEventListener('click', (e) => {
-    if (e.target === adminHubModal) closeAdminHub();
-  });
-
-  // Close on Escape
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !adminHubModal?.classList.contains('hidden')) {
-      closeAdminHub();
-    }
-  });
-
-
-  // ---- Permissions ----
+  // ---- Permissions (Roles -> Abilities) ----
   async function loadPermissions() {
     if (!isAuthed() || CURRENT_USER?.role !== 'admin') return;
     try {
@@ -718,105 +714,159 @@ document.addEventListener('DOMContentLoaded', () => {
         permissionsList.innerHTML = `<div style="color:#b91c1c">Error loading permissions: ${t || res.status}</div>`;
         return;
       }
-      const data = await res.json(); // { roles:[], abilities:[], role_abilities:[] }
-      renderPermissions(data);
+      const raw = await res.json();
+
+      // Normalize both possible API shapes
+      let roles = [];
+      let abilities = [];
+      let role_abilities = [];
+
+      if (Array.isArray(raw)) {
+        // Old shape: [{ role, abilities: [...] }, ...]
+        roles = raw.map(r => r.role);
+        const set = new Set();
+        raw.forEach(r => (r.abilities || []).forEach(a => set.add(a)));
+        abilities = [...set];
+        raw.forEach(r => (r.abilities || []).forEach(a => role_abilities.push({ role: r.role, ability: a })));
+      } else {
+        // New shape
+        roles = raw.roles || [];
+        abilities = raw.abilities || [];
+        role_abilities = raw.role_abilities || [];
+      }
+
+      PERM_STATE = { roles, abilities, role_abilities };
+      if (!CURRENT_ROLE_SEL && roles.length) CURRENT_ROLE_SEL = roles[0];
+      renderPermissionsUI();
     } catch (e) {
       console.error('loadPermissions error:', e);
       permissionsList.innerHTML = `<div style="color:#b91c1c">Error loading permissions (network/JS)</div>`;
     }
   }
 
-  function renderPermissions({ roles = [], abilities = [], role_abilities = [] }) {
+  function renderPermissionsUI() {
+    const { roles, abilities, role_abilities } = PERM_STATE;
+
     if (!roles.length || !abilities.length) {
       permissionsList.innerHTML = `<div style="color:#6b7280">No roles/abilities found.</div>`;
       return;
     }
+    if (!CURRENT_ROLE_SEL) CURRENT_ROLE_SEL = roles[0];
 
-    // Build a quick lookup: enabled[role][ability] = true
-    const enabled = {};
-    role_abilities.forEach(ra => {
-      if (!enabled[ra.role]) enabled[ra.role] = {};
-      enabled[ra.role][ra.ability] = true;
-    });
+    // Fast lookup for current role
+    const enabledSet = new Set(
+      role_abilities.filter(x => x.role === CURRENT_ROLE_SEL).map(x => x.ability)
+    );
 
-    // Table
+    // Layout: two columns (roles on the left, abilities on the right)
     const wrap = document.createElement('div');
     wrap.style.display = 'grid';
-    wrap.style.gridTemplateColumns = `200px repeat(${roles.length}, 1fr)`;
-    wrap.style.gap = '8px';
-    wrap.style.alignItems = 'center';
+    wrap.style.gridTemplateColumns = '220px 1fr';
+    wrap.style.gap = '14px';
 
-    // Header row
-    wrap.appendChild(hcell('Ability'));
-    roles.forEach(r => wrap.appendChild(hcell(cap(r))));
+    // --- Roles column ---
+    const rolesCol = document.createElement('div');
+    rolesCol.style.display = 'grid';
+    rolesCol.style.gridTemplateColumns = '1fr';
+    rolesCol.style.gap = '8px';
 
-    // Ability rows
-    abilities.forEach(ability => {
-      wrap.appendChild(ccell(ability));
-      roles.forEach(role => {
-        const checked = !!enabled[role]?.[ability];
-        const box = document.createElement('input');
-        box.type = 'checkbox';
-        box.checked = checked;
-        box.dataset.role = role;
-        box.dataset.ability = ability;
-        box.addEventListener('change', onToggleAbility);
-        const holder = document.createElement('div');
-        holder.style.display = 'flex';
-        holder.style.justifyContent = 'center';
-        holder.appendChild(box);
-        wrap.appendChild(holder);
+    roles.forEach(role => {
+      const btn = document.createElement('button');
+      btn.className = 'secondary';
+      btn.textContent = cap(role);
+      btn.dataset.role = role;
+      btn.style.textAlign = 'left';
+      btn.style.width = '100%';
+      if (role === CURRENT_ROLE_SEL) {
+        btn.style.background = '#555';
+        btn.style.color = '#fff';
+        btn.style.borderColor = '#444';
+      }
+      btn.addEventListener('click', () => {
+        CURRENT_ROLE_SEL = role;
+        renderPermissionsUI(); // re-render to show abilities for the selected role
       });
+      rolesCol.appendChild(btn);
     });
 
+    // --- Abilities column ---
+    const abilCol = document.createElement('div');
+    abilCol.style.display = 'grid';
+    abilCol.style.gridTemplateColumns = '1fr';
+    abilCol.style.gap = '8px';
+
+    const title = document.createElement('div');
+    title.innerHTML = `<strong>${cap(CURRENT_ROLE_SEL)}</strong> abilities`;
+    title.style.marginBottom = '4px';
+    abilCol.appendChild(title);
+
+    abilities.forEach(ability => {
+      const row = document.createElement('label');
+      row.style.display = 'grid';
+      row.style.gridTemplateColumns = '24px 1fr';
+      row.style.alignItems = 'center';
+      row.style.gap = '10px';
+      row.style.padding = '6px 8px';
+      row.style.border = '1px solid var(--line)';
+      row.style.borderRadius = '8px';
+      row.style.background = '#fff';
+
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = enabledSet.has(ability);
+      box.dataset.role = CURRENT_ROLE_SEL;
+      box.dataset.ability = ability;
+
+      box.addEventListener('change', async (e) => {
+        const enabled = e.target.checked;
+        e.target.disabled = true;
+        try {
+          // POST to add, DELETE to remove (matches your routes)
+          const method = enabled ? 'POST' : 'DELETE';
+          const res = await authFetch(PERMS, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role: CURRENT_ROLE_SEL, ability })
+          });
+          if (!res.ok) {
+            const t = await res.text().catch(()=> '');
+            alert(`Update failed: ${t || res.status}`);
+            e.target.checked = !enabled; // revert
+            return;
+          }
+          // Update local state
+          if (enabled) {
+            PERM_STATE.role_abilities.push({ role: CURRENT_ROLE_SEL, ability });
+          } else {
+            PERM_STATE.role_abilities = PERM_STATE.role_abilities.filter(
+              ra => !(ra.role === CURRENT_ROLE_SEL && ra.ability === ability)
+            );
+          }
+        } catch (err) {
+          console.error('toggle ability error:', err);
+          alert('Update failed (network).');
+          e.target.checked = !enabled; // revert
+        } finally {
+          e.target.disabled = false;
+        }
+      });
+
+      const labelText = document.createElement('span');
+      labelText.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, monospace';
+      labelText.textContent = ability;
+
+      row.appendChild(box);
+      row.appendChild(labelText);
+      abilCol.appendChild(row);
+    });
+
+    wrap.appendChild(rolesCol);
+    wrap.appendChild(abilCol);
     permissionsList.innerHTML = '';
     permissionsList.appendChild(wrap);
-
-    function hcell(text) {
-      const d = document.createElement('div');
-      d.textContent = text;
-      d.style.fontWeight = '700';
-      d.style.borderBottom = '1px solid var(--line)';
-      d.style.padding = '6px 4px';
-      d.style.textAlign = text === 'Ability' ? 'left' : 'center';
-      return d;
-    }
-    function ccell(text) {
-      const d = document.createElement('div');
-      d.textContent = text;
-      d.style.padding = '6px 4px';
-      d.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, monospace';
-      return d;
-    }
-    function cap(s){ return String(s || '').replace(/^\w/, c => c.toUpperCase()); }
   }
 
-  async function onToggleAbility(e) {
-    const role = e.target.dataset.role;
-    const ability = e.target.dataset.ability;
-    const nowChecked = e.target.checked;
-
-    e.target.disabled = true;
-    try {
-      // Prefer POST to add, DELETE to remove
-      const method = nowChecked ? 'POST' : 'DELETE';
-      const res = await authFetch(PERMS, {
-        method,
-        headers: { 'Content-Type':'application/json' },
-        body: JSON.stringify({ role, ability })
-      });
-      if (!res.ok) {
-        const t = await res.text().catch(()=> '');
-        throw new Error(`HTTP ${res.status}: ${t}`);
-      }
-    } catch (err) {
-      console.error('toggle ability error:', err);
-      alert('Update failed.');
-      e.target.checked = !nowChecked; // revert on error
-    } finally {
-      e.target.disabled = false;
-    }
-  }
+  function cap(s){ return String(s || '').replace(/^\w/, c => c.toUpperCase()); }
 
   // Upload change -> patch job (guarded)
   const jobGridChange = async (e) => {
