@@ -65,19 +65,59 @@ document.addEventListener('DOMContentLoaded', () => {
   const assignModal  = document.getElementById('assignModal');
   const assignForm   = document.getElementById('assignForm');
   const cancelAssign = document.getElementById('cancelAssign');
-  const assignInput  = document.getElementById('assignEmployeeName');
+  const assignSelect = document.getElementById('assignCandidate'); // <- NEW
   let ASSIGN_JOB_ID = null;
 
   function openAssignModal(jobId){
     ASSIGN_JOB_ID = jobId;
     assignForm?.reset();
     assignModal?.classList.remove('hidden');
-    setTimeout(() => assignInput?.focus(), 50);
+    // Load candidates list each time to stay fresh
+    loadCandidateOptions().then(() => assignSelect?.focus());
   }
   function closeAssignModal(){
     ASSIGN_JOB_ID = null;
     assignModal?.classList.add('hidden');
   }
+
+/** Populate the Assign dropdown from /api/candidates (admin/employment only) */
+async function loadCandidateOptions(){
+  if (!assignSelect) return;
+  assignSelect.innerHTML = `<option value="" disabled selected>Loading…</option>`;
+  try {
+    const res = await authFetch('/api/candidates');
+    if (!res.ok) {
+      const t = await res.text().catch(()=> '');
+      assignSelect.innerHTML = `<option value="" disabled selected>Failed to load candidates</option>`;
+      console.error('loadCandidateOptions failed:', res.status, t);
+      return;
+    }
+    const list = await res.json();
+
+    // Sort by name; you can also filter by status if you only want certain stages:
+    // e.g. const filtered = list.filter(c => c.status !== 'did_not_start');
+    const filtered = Array.isArray(list) ? [...list] : [];
+    filtered.sort((a,b) => String(a.full_name||'').localeCompare(String(b.full_name||'')));
+
+    if (!filtered.length) {
+      assignSelect.innerHTML = `<option value="" disabled selected>No candidates found</option>`;
+      return;
+    }
+
+    assignSelect.innerHTML = `<option value="" disabled selected>Select a candidate…</option>`;
+    for (const c of filtered) {
+      const opt = document.createElement('option');
+      opt.value = c.id;                         // keep id as value (future-proof)
+      opt.textContent = c.full_name || '(Unnamed)';
+      opt.dataset.name = c.full_name || '';
+      assignSelect.appendChild(opt);
+    }
+  } catch (err) {
+    console.error('loadCandidateOptions threw:', err);
+    assignSelect.innerHTML = `<option value="" disabled selected>Error loading candidates</option>`;
+  }
+}
+
 
   /* ------- Auth helpers ------- */
   const getToken = () => localStorage.getItem(TOKEN_KEY) || '';
@@ -523,19 +563,28 @@ document.addEventListener('DOMContentLoaded', () => {
   // Assign modal
   assignForm?.addEventListener('submit', async (e)=>{
     e.preventDefault();
-    if (!isAuthed() || !(CURRENT_USER?.role === 'admin' || CURRENT_USER?.role === 'employment')) { openLoginModal(); return; }
-    const name = assignInput?.value?.trim();
-    if (!name || !ASSIGN_JOB_ID) return;
+    if (!isAuthed() || !(CURRENT_USER?.role === 'admin' || CURRENT_USER?.role === 'employment')) {
+      openLoginModal(); 
+      return;
+    }
+    if (!ASSIGN_JOB_ID) return;
 
-    await authFetch(`${API}/${ASSIGN_JOB_ID}/assign`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ employee: name })
-    });
+    const opt = assignSelect?.selectedOptions?.[0];
+    if (!opt || !opt.value) return;
 
-    closeAssignModal();
-    loadJobs();
+  // We keep backend unchanged: send the candidate's name as "employee"
+  const employeeName = opt.dataset.name || opt.textContent || '';
+
+  await authFetch(`/api/jobs/${ASSIGN_JOB_ID}/assign`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ employee: employeeName })
   });
+
+  closeAssignModal();
+  loadJobs();
+});
+
   cancelAssign?.addEventListener('click', closeAssignModal);
 
   // Create / Update job with guard

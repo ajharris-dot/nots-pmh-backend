@@ -110,19 +110,27 @@
   <!-- Assign Employee Modal -->
   <div id="assignModal" class="modal hidden" aria-hidden="true">
     <div class="modal-card">
-      <h2>Assign Employee</h2>
+      <h2>Assign Candidate</h2>
+
       <form id="assignForm">
-        <label for="assignEmployeeName">Employee Name
-          <input type="text" id="assignEmployeeName" placeholder="Enter employee name" required />
+        <label for="assignCandidate">Choose from Candidates
+          <select id="assignCandidate" required>
+            <option value="" disabled selected>Loading…</option>
+          </select>
         </label>
 
         <div class="modal-actions">
           <button type="submit" class="primary">Assign</button>
           <button type="button" id="cancelAssign" class="secondary">Cancel</button>
         </div>
+
+        <p class="muted" style="margin-top:8px;">
+          Need someone new? Add them in <a href="/employment.html">Employment → Candidates</a>.
+        </p>
       </form>
     </div>
   </div>
+
 
   <!-- Admin Hub (Users + Role Permissions) -->
   <div id="adminHubModal" class="modal hidden" aria-hidden="true">
