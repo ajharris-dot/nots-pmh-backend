@@ -42,7 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const adminHubBtn = document.getElementById('adminHubBtn');
   const adminHubModal = document.getElementById('adminHubModal');
   const closeAdminHubBtn = document.getElementById('closeAdminHub');
-  const permissionsList = document.getElementById('permissionsList');
+  const permissionsList = document.getElementById('permissionsList'); // <-- keep only this one
 
   // Users sub-section
   const userForm = document.getElementById('userForm');
@@ -54,9 +54,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const userRoleEl = document.getElementById('userRole');
   const userPasswordEl = document.getElementById('userPassword');
 
-  // Employment Page Button
+  // Employment Page Button (optional on some pages)
   const employmentPageBtn = document.getElementById('employmentPageBtn');
-
 
   // View toggle buttons
   const cardViewBtn = document.getElementById('cardViewBtn');
@@ -111,7 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!role) return false;
     if (role === 'admin') return true;
 
-    // NOTE: these remain hard-coded for now; the Admin Hub updates server data.
+    // NOTE: these remain hard-coded on client; Admin Hub changes are stored server-side.
     const EMPLOYMENT = ['assign', 'unassign', 'upload_photo'];
     const OPERATIONS = ['create_job', 'edit_job', 'delete_job'];
     if (role === 'employment') return EMPLOYMENT.includes(action);
@@ -158,12 +157,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Employment page button (admin + employment)
-    if (isAuthed() && (CURRENT_USER?.role === 'admin' || CURRENT_USER?.role === 'employment')) {
+    if (authed && (CURRENT_USER?.role === 'admin' || CURRENT_USER?.role === 'employment')) {
       employmentPageBtn?.setAttribute('style', '');
     } else {
       employmentPageBtn?.setAttribute('style', 'display:none');
     }
-
 
     render(); // re-render UI actions per role
   }
@@ -710,16 +708,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Employment Button Listener
+  // Employment Button Listener (show only on pages that include the button)
   employmentPageBtn?.addEventListener('click', () => {
     window.location.href = '/employment.html';
-  });
-
-
-  resetUserFormBtn?.addEventListener('click', resetUserForm);
-  adminHubBtn?.addEventListener('click', () => {
-    if (CURRENT_USER?.role !== 'admin') return;
-    openAdminHub();
   });
 
   // ---- Permissions (Roles -> Abilities) ----
