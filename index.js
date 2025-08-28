@@ -13,6 +13,8 @@ const authMiddleware = require('./middleware/authMiddleware');
 
 const permissionsRoutes = require('./routes/permissionsRoutes');
 
+const candidatesRoutes = require('./routes/candidatesRoutes');
+
 const app = express();
 
 /* ---------- Uploads setup ---------- */
@@ -100,6 +102,9 @@ app.use('/api/users', authMiddleware, authorizeRoles('admin'), usersRoutes);
 // Admin-only Permissions 
 app.use('/api/permissions', authMiddleware, authorizeRoles('admin'), permissionsRoutes);
 
+// Employment: Candidates management
+app.use('/api/candidates', authMiddleware, authorizeRoles('admin', 'employment'), candidatesRoutes);
+
 // Protected upload (admins + employment can upload photos)
 app.post(
   '/api/upload',
@@ -128,6 +133,12 @@ app.get('/debug/env', (_req, res) => {
     SESSION_SECRET: !!process.env.SESSION_SECRET
   });
 });
+
+/* ---------- Employment Page --------- */
+app.get('/employment.html', (_req, res) =>
+  res.sendFile(path.join(__dirname, 'public', 'employment.html'))
+);
+
 
 /* ---------- 404 fallback ---------- */
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }));

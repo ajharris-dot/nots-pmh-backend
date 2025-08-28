@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Employment — Candidates</title>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body class="card-view">
+  <header class="topbar">
+    <h1>Employment</h1>
+    <div class="topbar-logo"><img src="/logo.png" alt="Logo"/></div>
+    <div class="topbar-actions">
+      <button id="backToHubBtn" class="secondary">← Positions</button>
+      <button id="addCandidateBtn" class="primary">+ Add Candidate</button>
+    </div>
+  </header>
+
+  <main class="content">
+    <div class="toolbar">
+      <input id="search" placeholder="Search name / email / phone"/>
+    </div>
+    <div id="candidatesGrid" class="card-grid"></div>
+  </main>
+
+  <!-- Add/Edit Candidate Modal -->
+  <div id="candidateModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-card">
+      <h2 id="candidateModalTitle">Add Candidate</h2>
+      <form id="candidateForm">
+        <input type="hidden" id="candId"/>
+
+        <label>Name
+          <input type="text" id="candName" required/>
+        </label>
+        <label>Email
+          <input type="email" id="candEmail"/>
+        </label>
+        <label>Phone
+          <input type="text" id="candPhone"/>
+        </label>
+        <label>Status
+          <select id="candStatus" required>
+            <option value="pending_pre_employment">Pending pre-employment</option>
+            <option value="pending_onboarding">Pending onboarding</option>
+            <option value="offer_extended">Offer extended</option>
+            <option value="ready_to_start">Ready to start</option>
+            <option value="hired">Hired</option>
+            <option value="did_not_start">Did not start</option>
+          </select>
+        </label>
+        <label>Notes
+          <input type="text" id="candNotes" placeholder="Short note (optional)"/>
+        </label>
+
+        <div class="modal-actions">
+          <button type="submit" class="primary">Save</button>
+          <button type="button" id="cancelCandidateModal" class="secondary">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="employment.js"></script>
+</body>
+</html>

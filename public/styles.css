@@ -113,6 +113,9 @@ button:disabled{ opacity:0.55; cursor:not-allowed; }
 .badge-open{ background:#f8fafc; border-color:#e2e8f0; color:#0f766e; }
 .badge-filled{ background:#fdf2f2; border-color:#fee2e2; color:#991b1b; }
 
+/* Candidate-specific tweak (reuses job-card styles) */
+.badge.hired { background:#ecfdf5; border-color:#d1fae5; color:#065f46; }
+
 .card-meta{ margin:6px 0 10px 0; color:var(--muted); font-size:14px; display:grid; row-gap:3px; }
 .meta-row strong{ color:var(--text); font-weight:600; margin-right:6px; }
 

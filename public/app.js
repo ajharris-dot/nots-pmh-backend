@@ -54,6 +54,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const userRoleEl = document.getElementById('userRole');
   const userPasswordEl = document.getElementById('userPassword');
 
+  // Employment Page Button
+  const employmentPageBtn = document.getElementById('employmentPageBtn');
+
+
   // View toggle buttons
   const cardViewBtn = document.getElementById('cardViewBtn');
   const listViewBtn = document.getElementById('listViewBtn');
@@ -152,6 +156,14 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       adminHubBtn?.setAttribute('style', 'display:none');
     }
+
+    // Employment page button (admin + employment)
+    if (isAuthed() && (CURRENT_USER?.role === 'admin' || CURRENT_USER?.role === 'employment')) {
+      employmentPageBtn?.setAttribute('style', '');
+    } else {
+      employmentPageBtn?.setAttribute('style', 'display:none');
+    }
+
 
     render(); // re-render UI actions per role
   }
@@ -697,6 +709,12 @@ document.addEventListener('DOMContentLoaded', () => {
       alert('Save failed (network).');
     }
   });
+
+  // Employment Button Listener
+  employmentPageBtn?.addEventListener('click', () => {
+    window.location.href = '/employment.html';
+  });
+
 
   resetUserFormBtn?.addEventListener('click', resetUserForm);
   adminHubBtn?.addEventListener('click', () => {
