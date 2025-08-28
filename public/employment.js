@@ -4,10 +4,10 @@ const API  = '/api/candidates';
 const TOKEN_KEY = 'authToken';
 const PLACEHOLDER = './placeholder-v2.png?v=20250814';
 
-const getToken = () => localStorage.getItem(TOKEN_KEY) || '';
-const setToken = (t) => localStorage.setItem(TOKEN_KEY, t);
-const clearToken = () => localStorage.removeItem(TOKEN_KEY);
-const isAuthed = () => !!getToken();
+const getToken  = () => localStorage.getItem(TOKEN_KEY) || '';
+const setToken  = (t) => localStorage.setItem(TOKEN_KEY, t);
+const clearToken= () => localStorage.removeItem(TOKEN_KEY);
+const isAuthed  = () => !!getToken();
 const authFetch = (url, opts = {}) => {
   const headers = new Headers(opts.headers || {});
   const t = getToken();
@@ -24,12 +24,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const grid      = document.getElementById('candidatesGrid');
   const search    = document.getElementById('search');
 
-  // Auth UI (optional here, but handy)
-  const loginBtn  = document.getElementById('loginBtn');
-  const logoutBtn = document.getElementById('logoutBtn');
+  // (Optional) auth UI—safe if these don't exist on the page
+  const loginBtn   = document.getElementById('loginBtn');
+  const logoutBtn  = document.getElementById('logoutBtn');
   const loginModal = document.getElementById('loginModal');
   const loginForm  = document.getElementById('loginForm');
-  const cancelLogin = document.getElementById('cancelLogin');
+  const cancelLogin= document.getElementById('cancelLogin');
 
   // Candidate modal
   const modal     = document.getElementById('candidateModal');
@@ -128,7 +128,6 @@ document.addEventListener('DOMContentLoaded', () => {
     clearToken();
     CURRENT_USER = null;
     updateAuthUI();
-    // Still allow viewing (GET may be guarded; if so you’ll see message)
     load();
   });
 
@@ -141,11 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   cancelBtn?.addEventListener('click', closeModal);
 
-  // Close on backdrop click
-  modal?.addEventListener('click', (e) => {
-    if (e.target === modal) closeModal();
-  });
-  // Close on Esc
+  modal?.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !modal?.classList.contains('hidden')) closeModal();
     if (e.key === 'Escape' && !loginModal?.classList.contains('hidden')) closeLoginModal();
@@ -157,8 +152,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const role = CURRENT_USER?.role;
     if (!(role === 'admin' || role === 'employment')) { alert('Access denied.'); return; }
 
+    const full_name = nameEl.value?.trim();
+    if (!full_name) { alert('Name is required.'); nameEl.focus(); return; }
+
     const payload = {
-      name: nameEl.value?.trim(),
+      full_name,
       email: emailEl.value?.trim() || null,
       phone: phoneEl.value?.trim() || null,
       status: statusEl.value,
@@ -182,6 +180,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       }
       if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          alert('Please log in with Employment/Admin access.');
+          openLoginModal();
+          return;
+        }
         const t = await res.text().catch(()=> '');
         alert(`Save failed: ${t || res.status}`);
         return;
@@ -223,6 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       load();
+      return;
     }
 
     if (action === 'advance' || action === 'revert') {
@@ -274,6 +278,10 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const res = await authFetch(API);
       if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          grid.innerHTML = `<div class="muted">Please log in with Employment/Admin to view candidates.</div>`;
+          return;
+        }
         const t = await res.text().catch(()=> '');
         grid.innerHTML = `<div style="color:#b91c1c">Error loading candidates: ${t || res.status}</div>`;
         return;
@@ -291,7 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
     grid.innerHTML = '';
 
     const list = ALL.filter(c => {
-      const t = `${c.name || ''} ${c.email || ''} ${c.phone || ''}`.toLowerCase();
+      const t = `${c.full_name || ''} ${c.email || ''} ${c.phone || ''}`.toLowerCase();
       return !q || t.includes(q);
     });
 
@@ -310,7 +318,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         <div class="card-body">
           <div class="card-title">
-            <h3>${escapeHtml(c.name || 'Unnamed')}</h3>
+            <h3>${escapeHtml(c.full_name || 'Unnamed')}</h3>
             ${statusBadge(c.status)}
           </div>
 
@@ -336,7 +344,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function statusBadge(s) {
     const label = STATUS_LABEL[s] || s;
-    // Styling reuse: use open/filled colors loosely
     const cls =
       s === 'hired' ? 'badge-open' :
       s === 'did_not_start' ? 'badge-filled' : '';
@@ -376,7 +383,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (c) {
       title.textContent = 'Edit Candidate';
       idEl.value = c.id;
-      nameEl.value = c.name || '';
+      nameEl.value = c.full_name || '';
       emailEl.value = c.email || '';
       phoneEl.value = c.phone || '';
       statusEl.value = STATUS_ORDER.includes(c.status) ? c.status : 'pending_pre_employment';
