@@ -8,13 +8,20 @@
 </head>
 <body class="card-view">
   <header class="topbar">
-    <h1>Positions Hub</h1>
+    <!-- LEFT: title + left-side buttons -->
+    <div class="topbar-left">
+      <h1>Positions Hub</h1>
+      <button id="employmentPageBtn" class="secondary" style="display:none">Employment</button>
+      <!-- Admin-only control (shown by app.js when role === 'admin') -->
+      <button id="adminHubBtn" class="secondary" style="display:none">Admin Hub</button>
+    </div>
 
-    <!-- Center logo -->
+    <!-- CENTER: logo -->
     <div class="topbar-logo">
       <img src="/logo.png" alt="Logo">
     </div>
 
+    <!-- RIGHT: everything else -->
     <div class="topbar-actions">
       <div class="filters">
         <button class="tab active" data-filter="all">All</button>
@@ -25,23 +32,15 @@
       <button id="loginBtn" class="secondary">Log In</button>
       <button id="logoutBtn" class="secondary" style="display:none">Log Out</button>
 
-      <!-- Admin-only controls (shown by app.js when role === 'admin') -->
-      <button id="adminHubBtn" class="secondary" style="display:none">Admin Hub</button>
-      <!-- Fallback for older JS that still references manageUsersBtn -->
-      <button id="manageUsersBtn" class="secondary" style="display:none">Manage Users</button>
-
       <div class="view-toggle" role="group" aria-label="View toggle">
         <button id="cardViewBtn" class="secondary active">Cards</button>
         <button id="listViewBtn" class="secondary">List</button>
       </div>
 
-      <!-- Employment page (shown only to admin & employment by app.js) -->
-      <button id="employmentPageBtn" class="secondary" style="display:none">Employment</button>
-
-
       <button id="addJobBtn" class="primary">+ Add Position</button>
     </div>
   </header>
+
 
   <main class="content">
     <!-- Search -->

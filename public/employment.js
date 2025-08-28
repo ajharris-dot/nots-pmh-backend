@@ -4,11 +4,14 @@ const API  = '/api/candidates';
 const TOKEN_KEY = 'authToken';
 const PLACEHOLDER = './placeholder-v2.png?v=20250814';
 
-const getToken  = () => localStorage.getItem(TOKEN_KEY) || '';
-const setToken  = (t) => localStorage.setItem(TOKEN_KEY, t);
-const clearToken= () => localStorage.removeItem(TOKEN_KEY);
-const isAuthed  = () => !!getToken();
-const authFetch = (url, opts = {}) => {
+const VIEW_KEY = 'employmentViewMode';
+let VIEW_MODE = localStorage.getItem(VIEW_KEY) || 'list'; // 'card' | 'list'
+
+const getToken   = () => localStorage.getItem(TOKEN_KEY) || '';
+const setToken   = (t) => localStorage.setItem(TOKEN_KEY, t);
+const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+const isAuthed   = () => !!getToken();
+const authFetch  = (url, opts = {}) => {
   const headers = new Headers(opts.headers || {});
   const t = getToken();
   if (t) headers.set('Authorization', `Bearer ${t}`);
@@ -24,12 +27,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const grid      = document.getElementById('candidatesGrid');
   const search    = document.getElementById('search');
 
-  // (Optional) auth UI—safe if these don't exist on the page
-  const loginBtn   = document.getElementById('loginBtn');
-  const logoutBtn  = document.getElementById('logoutBtn');
-  const loginModal = document.getElementById('loginModal');
-  const loginForm  = document.getElementById('loginForm');
-  const cancelLogin= document.getElementById('cancelLogin');
+  // Optional auth UI (safe if absent)
+  const loginBtn    = document.getElementById('loginBtn');
+  const logoutBtn   = document.getElementById('logoutBtn');
+  const loginModal  = document.getElementById('loginModal');
+  const loginForm   = document.getElementById('loginForm');
+  const cancelLogin = document.getElementById('cancelLogin');
+
+  // View toggle
+  const candCardViewBtn = document.getElementById('candCardViewBtn');
+  const candListViewBtn = document.getElementById('candListViewBtn');
 
   // Candidate modal
   const modal     = document.getElementById('candidateModal');
@@ -37,12 +44,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const form      = document.getElementById('candidateForm');
   const cancelBtn = document.getElementById('cancelCandidateModal');
 
-  const idEl      = document.getElementById('candId');
-  const nameEl    = document.getElementById('candName');
-  const emailEl   = document.getElementById('candEmail');
-  const phoneEl   = document.getElementById('candPhone');
-  const statusEl  = document.getElementById('candStatus');
-  const notesEl   = document.getElementById('candNotes');
+  const idEl     = document.getElementById('candId');
+  const nameEl   = document.getElementById('candName');
+  const emailEl  = document.getElementById('candEmail');
+  const phoneEl  = document.getElementById('candPhone');
+  const statusEl = document.getElementById('candStatus');
+  const notesEl  = document.getElementById('candNotes');
 
   const STATUS_ORDER = [
     'pending_pre_employment',
@@ -63,6 +70,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ---------- Nav ---------- */
   backBtn?.addEventListener('click', () => (window.location.href = '/'));
+
+  /* ---------- View toggle helpers ---------- */
+  function syncViewToggle() {
+    if (VIEW_MODE === 'list') {
+      candCardViewBtn?.classList.remove('active');
+      candListViewBtn?.classList.add('active');
+    } else {
+      candListViewBtn?.classList.remove('active');
+      candCardViewBtn?.classList.add('active');
+    }
+  }
+  candCardViewBtn?.addEventListener('click', () => {
+    VIEW_MODE = 'card';
+    localStorage.setItem(VIEW_KEY, VIEW_MODE);
+    syncViewToggle();
+    render();
+  });
+  candListViewBtn?.addEventListener('click', () => {
+    VIEW_MODE = 'list';
+    localStorage.setItem(VIEW_KEY, VIEW_MODE);
+    syncViewToggle();
+    render();
+  });
 
   /* ---------- Auth helpers ---------- */
   function updateAuthUI() {
@@ -256,6 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
   (async () => {
     await fetchMe();
     updateAuthUI();
+    syncViewToggle();     // ensure toggle reflects current mode
     await load();
   })();
 
@@ -298,6 +329,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const q = (search?.value || '').toLowerCase().trim();
     grid.innerHTML = '';
 
+    // Apply container classes for the chosen layout
+    grid.classList.toggle('card-grid', VIEW_MODE === 'card');
+    grid.classList.toggle('list-grid', VIEW_MODE === 'list');
+
     const list = ALL.filter(c => {
       const t = `${c.full_name || ''} ${c.email || ''} ${c.phone || ''}`.toLowerCase();
       return !q || t.includes(q);
@@ -309,36 +344,69 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     list.forEach(c => {
-      const card = document.createElement('div');
-      card.className = 'job-card'; // reuse card style
-      card.innerHTML = `
-        <div class="photo-container">
-          <img src="${PLACEHOLDER}" alt="Candidate" />
-        </div>
-
-        <div class="card-body">
-          <div class="card-title">
-            <h3>${escapeHtml(c.full_name || 'Unnamed')}</h3>
-            ${statusBadge(c.status)}
+      if (VIEW_MODE === 'list') {
+        // ---------- LIST ROW ----------
+        const row = document.createElement('div');
+        row.className = 'job-row'; // reuse list row styling
+        row.innerHTML = `
+          <div class="thumb">
+            <img src="${PLACEHOLDER}" alt="Candidate" />
           </div>
 
-          ${timelineHtml(c.status)}
-
-          <div class="card-meta" style="margin-top:8px;">
-            ${c.email ? `<div class="meta-row"><strong>Email:</strong> ${escapeHtml(c.email)}</div>` : ''}
-            ${c.phone ? `<div class="meta-row"><strong>Phone:</strong> ${escapeHtml(c.phone)}</div>` : ''}
-            ${c.notes ? `<div class="meta-row"><strong>Notes:</strong> ${escapeHtml(c.notes)}</div>` : ''}
+          <div class="info">
+            <div class="title-line">
+              <h3>${escapeHtml(c.full_name || 'Unnamed')}</h3>
+              ${statusBadge(c.status)}
+            </div>
+            <div class="meta">
+              ${c.email ? `<div><strong>Email:</strong> ${escapeHtml(c.email)}</div>` : ''}
+              ${c.phone ? `<div><strong>Phone:</strong> ${escapeHtml(c.phone)}</div>` : ''}
+              ${c.notes ? `<div><strong>Notes:</strong> ${escapeHtml(c.notes)}</div>` : ''}
+            </div>
+            ${timelineHtml(c.status)}
           </div>
-        </div>
 
-        <div class="card-actions">
-          <button class="secondary" data-action="revert"  data-id="${c.id}">◀︎ Step Back</button>
-          <button class="secondary" data-action="advance" data-id="${c.id}">Step Forward ▶︎</button>
-          <button class="secondary" data-action="edit"    data-id="${c.id}">Edit</button>
-          <button class="danger"    data-action="delete"  data-id="${c.id}">Delete</button>
-        </div>
-      `;
-      grid.appendChild(card);
+          <div class="actions">
+            <button class="secondary" data-action="revert"  data-id="${c.id}">◀︎ Step Back</button>
+            <button class="secondary" data-action="advance" data-id="${c.id}">Step Forward ▶︎</button>
+            <button class="secondary" data-action="edit"    data-id="${c.id}">Edit</button>
+            <button class="danger"    data-action="delete"  data-id="${c.id}">Delete</button>
+          </div>
+        `;
+        grid.appendChild(row);
+      } else {
+        // ---------- CARD ----------
+        const card = document.createElement('div');
+        card.className = 'job-card'; // reuse card style
+        card.innerHTML = `
+          <div class="photo-container">
+            <img src="${PLACEHOLDER}" alt="Candidate" />
+          </div>
+
+          <div class="card-body">
+            <div class="card-title">
+              <h3>${escapeHtml(c.full_name || 'Unnamed')}</h3>
+              ${statusBadge(c.status)}
+            </div>
+
+            ${timelineHtml(c.status)}
+
+            <div class="card-meta" style="margin-top:8px;">
+              ${c.email ? `<div class="meta-row"><strong>Email:</strong> ${escapeHtml(c.email)}</div>` : ''}
+              ${c.phone ? `<div class="meta-row"><strong>Phone:</strong> ${escapeHtml(c.phone)}</div>` : ''}
+              ${c.notes ? `<div class="meta-row"><strong>Notes:</strong> ${escapeHtml(c.notes)}</div>` : ''}
+            </div>
+          </div>
+
+          <div class="card-actions">
+            <button class="secondary" data-action="revert"  data-id="${c.id}">◀︎ Step Back</button>
+            <button class="secondary" data-action="advance" data-id="${c.id}">Step Forward ▶︎</button>
+            <button class="secondary" data-action="edit"    data-id="${c.id}">Edit</button>
+            <button class="danger"    data-action="delete"  data-id="${c.id}">Delete</button>
+          </div>
+        `;
+        grid.appendChild(card);
+      }
     });
   }
 
