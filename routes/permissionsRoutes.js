@@ -1,49 +1,28 @@
 const express = require('express');
-const pool = require('../models/db'); // your pg pool
 const router = express.Router();
+
+// Make sure this matches how your other routes import the db:
+// const db = require('../db');  // or const pool = require('../db');
+const db = require('../models/db');
 
 /**
  * GET /api/permissions
  * Returns:
- * {
- *   roles: [ 'admin', 'operations', ... ],
- *   abilities: [ 'create_job', ... ],
- *   role_abilities: [ { role, ability }, ... ]
- * }
- *
- * Note: We DO NOT require a "roles" table.
- * Roles are derived from:
- *  - Distinct roles from users table
- *  - Distinct roles in role_permissions
- *  - A default set to ensure admin/operations/employment exist
+ *   { roles: string[], abilities: string[], role_abilities: {role, ability}[] }
  */
-router.get('/', async (req, res) => {
+router.get('/', async (_req, res) => {
   try {
-    // abilities
-    const ab = await pool.query('SELECT ability FROM public.abilities ORDER BY ability');
-    const abilities = ab.rows.map(r => r.ability);
+    // If you don't have a 'roles' table, keep this static list, or build it from your app’s known roles.
+    const roles = ['admin', 'operations', 'employment', 'manager', 'user'];
 
-    // role_abilities from role_permissions
-    const ra = await pool.query(
-      'SELECT role, ability FROM public.role_permissions ORDER BY role, ability'
-    );
-    const role_abilities = ra.rows;
+    const abilRes = await db.query(`SELECT ability_key FROM abilities ORDER BY ability_key`);
+    const abilities = abilRes.rows.map(r => r.ability_key);
 
-    // roles: union of defaults + users.role + role_permissions.role
-    const defaults = ['admin', 'operations', 'employment', 'manager', 'user'];
-
-    // users.role may not exist or may be nullable; handle gracefully
-    let userRoles = [];
-    try {
-      const ur = await pool.query('SELECT DISTINCT role FROM public.users WHERE role IS NOT NULL');
-      userRoles = ur.rows.map(r => r.role);
-    } catch (_) {
-      userRoles = [];
-    }
-
-    const permRoles = [...new Set(role_abilities.map(x => x.role))];
-
-    const roles = [...new Set([...defaults, ...userRoles, ...permRoles])].sort();
+    const rpRes = await db.query(`SELECT role, ability_key FROM role_permissions`);
+    const role_abilities = rpRes.rows.map(r => ({
+      role: r.role,
+      ability: r.ability_key
+    }));
 
     res.json({ roles, abilities, role_abilities });
   } catch (e) {
@@ -54,15 +33,16 @@ router.get('/', async (req, res) => {
 
 /**
  * POST /api/permissions
- * body: { role, ability }
- * Adds a mapping in role_permissions
+ * Body: { role, ability }
  */
 router.post('/', async (req, res) => {
   const { role, ability } = req.body || {};
-  if (!role || !ability) return res.status(400).json({ error: 'role and ability are required' });
+  if (!role || !ability) return res.status(400).json({ error: 'role and ability required' });
   try {
-    await pool.query(
-      'INSERT INTO public.role_permissions(role, ability) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    await db.query(
+      `INSERT INTO role_permissions(role, ability_key)
+       VALUES ($1, $2)
+       ON CONFLICT (role, ability_key) DO NOTHING`,
       [role, ability]
     );
     res.json({ ok: true });
@@ -74,18 +54,17 @@ router.post('/', async (req, res) => {
 
 /**
  * DELETE /api/permissions
- * body: { role, ability }
- * Removes a mapping from role_permissions
+ * Body: { role, ability }
  */
 router.delete('/', async (req, res) => {
   const { role, ability } = req.body || {};
-  if (!role || !ability) return res.status(400).json({ error: 'role and ability are required' });
+  if (!role || !ability) return res.status(400).json({ error: 'role and ability required' });
   try {
-    const r = await pool.query(
-      'DELETE FROM public.role_permissions WHERE role=$1 AND ability=$2',
+    await db.query(
+      `DELETE FROM role_permissions WHERE role = $1 AND ability_key = $2`,
       [role, ability]
     );
-    res.json({ ok: true, deleted: r.rowCount });
+    res.json({ ok: true });
   } catch (e) {
     console.error('DELETE /api/permissions error:', e);
     res.status(500).json({ error: 'server error' });
