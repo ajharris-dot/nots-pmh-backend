@@ -231,72 +231,78 @@ button:disabled{ opacity:0.55; cursor:not-allowed; }
 .card-grid.list{ display:none; }
 
 /* =========================
-   ADMIN HUB
+   Admin Hub — Roles & Permissions (new UI)
    ========================= */
-
-/* Make Admin Hub modal a bit larger than edit/login */
-#adminHubModal .modal-card{
-  width:min(1100px,95vw);
-}
-
-/* Admin sections layout: two columns on wide screens, stack on small */
-.admin-sections{
+.admin-layout{
   display:grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: 220px 1fr; /* roles | editor */
   gap:16px;
 }
-@media (min-width: 980px){
-  .admin-sections{ grid-template-columns: 1fr 1fr; }
+
+@media (max-width: 800px){
+  .admin-layout{ grid-template-columns: 1fr; }
 }
 
-.section-card{
-  border:1px solid var(--line);
-  background:var(--panel);
-  border-radius:12px;
-  padding:12px;
-  box-shadow:0 2px 10px rgba(0,0,0,0.06);
-}
-.section-card h3{
-  margin:0 0 8px 0;
-  font-size:16px;
+.roles-list{
+  display:grid;
+  gap:8px;
 }
 
-/* Users list box inside Admin Hub */
-#usersList{
-  max-height:320px;
-  overflow:auto;
+.role-btn{
+  width:100%;
+  text-align:left;
+  background:#fff;
+  color:var(--text);
   border:1px solid var(--line);
   border-radius:8px;
-  padding:8px;
+  padding:8px 12px;
+  cursor:pointer;
+}
+.role-btn:hover{ background:#fafafa; }
+.role-btn.active{
+  background:#555;
+  color:#fff;
+  border-color:#444;
+}
+
+.perm-editor{
+  border:1px solid var(--line);
+  background:#fff;
+  border-radius:12px;
+  padding:12px;
+}
+
+.perm-header{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:8px;
+}
+
+.perm-pool{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap:8px;
+}
+
+.perm-row{
+  display:grid;
+  grid-template-columns: 24px 1fr;
+  align-items:center;
+  gap:10px;
+  padding:6px 8px;
+  border:1px solid var(--line);
+  border-radius:8px;
   background:#fff;
 }
 
-/* Permissions grid table */
-.permissions-grid{
-  display:grid;
-  gap:8px;
-}
-.permissions-grid .pg-header{
-  display:grid;
-  grid-template-columns: 200px repeat(auto-fit, minmax(90px,1fr));
-  gap:8px;
-  font-weight:700;
-  border-bottom:1px solid var(--line);
-  padding-bottom:6px;
-}
-.permissions-grid .pg-row{
-  display:grid;
-  grid-template-columns: 200px repeat(auto-fit, minmax(90px,1fr));
-  gap:8px;
-  align-items:center;
-}
-.permissions-grid .pg-ability{
+.perm-code{
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  padding:6px 4px;
+  font-size: 13px;
+  color: var(--text);
 }
-.permissions-grid .pg-cell{
-  display:flex; align-items:center; justify-content:center;
-}
+
 
 /* Small helper styles for inline notes/empty states */
 .muted { color: var(--muted); }
@@ -323,7 +329,7 @@ button:disabled{ opacity:0.55; cursor:not-allowed; }
 #loginTransition {
   position: fixed;
   inset: 0;
-  background: black;
+  background: white;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -346,3 +352,5 @@ button:disabled{ opacity:0.55; cursor:not-allowed; }
   opacity: 0; /* fade out */
   pointer-events: none;
 }
+
+
