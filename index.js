@@ -12,7 +12,6 @@ const usersRoutes = require('./routes/usersRoutes');
 const authMiddleware = require('./middleware/authMiddleware');
 
 const permissionsRoutes = require('./routes/permissionsRoutes');
-
 const candidatesRoutes = require('./routes/candidatesRoutes');
 
 const app = express();
@@ -41,6 +40,8 @@ app.use(cors({
 }));
 app.options('*', cors());
 app.use(express.json({ limit: '1mb' }));
+
+// Static site (login.html, index.html, employment.html, etc.)
 app.use(express.static(path.join(__dirname, 'public')));
 
 /* ---------- Role helper ---------- */
@@ -58,51 +59,56 @@ function authorizeRoles(...roles) {
 // Auth
 app.use('/api/auth', authRoutes);
 
-// Role gates in front of jobRoutes:
-// - GETs remain public
-// - POST /api/jobs -> admin, operations
-app.post('/api/jobs',
+/* Jobs:
+// We keep the role gates for write operations,
+// AND we now require auth for *all* /api/jobs (including GET) below. */
+
+// Pre-route gates for specific actions (pass-through -> next())
+app.post(
+  '/api/jobs',
   authMiddleware,
   authorizeRoles('admin', 'operations'),
   (req, _res, next) => next()
 );
 
-// - PATCH /api/jobs/:id -> admin
-app.patch('/api/jobs/:id',
+app.patch(
+  '/api/jobs/:id',
   authMiddleware,
   authorizeRoles('admin'),
   (req, _res, next) => next()
 );
 
-// - DELETE /api/jobs/:id -> admin
-app.delete('/api/jobs/:id',
+app.delete(
+  '/api/jobs/:id',
   authMiddleware,
   authorizeRoles('admin'),
   (req, _res, next) => next()
 );
 
-// - POST /api/jobs/:id/assign|unassign -> admin, employment
-app.post('/api/jobs/:id/assign',
-  authMiddleware,
-  authorizeRoles('admin', 'employment'),
-  (req, _res, next) => next()
-);
-app.post('/api/jobs/:id/unassign',
+app.post(
+  '/api/jobs/:id/assign',
   authMiddleware,
   authorizeRoles('admin', 'employment'),
   (req, _res, next) => next()
 );
 
-// Jobs router (public GETs, protected writes pass-through due to gates above)
-app.use('/api/jobs', jobRoutes);
+app.post(
+  '/api/jobs/:id/unassign',
+  authMiddleware,
+  authorizeRoles('admin', 'employment'),
+  (req, _res, next) => next()
+);
+
+// Now mount the jobs router behind auth so even GETs require login
+app.use('/api/jobs', authMiddleware, jobRoutes);
 
 // Admin-only Users portal
 app.use('/api/users', authMiddleware, authorizeRoles('admin'), usersRoutes);
 
-// Admin-only Permissions 
+// Admin-only Permissions
 app.use('/api/permissions', authMiddleware, authorizeRoles('admin'), permissionsRoutes);
 
-// Employment: Candidates management
+// Employment: Candidates management (admin + employment)
 app.use('/api/candidates', authMiddleware, authorizeRoles('admin', 'employment'), candidatesRoutes);
 
 // Protected upload (admins + employment can upload photos)
@@ -118,9 +124,13 @@ app.post(
   }
 );
 
-/* ---------- Health + root ---------- */
+/* ---------- Health + HTML ---------- */
 app.get('/healthz', (_req, res) => res.status(200).json({ ok: true }));
+
+// These serve the SPA pages; client-side JS will redirect to /login.html if no token
 app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/employment.html', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'employment.html')));
+app.get('/login.html', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
 
 /* ---------- Debug (optional) ---------- */
 app.get('/debug/env', (_req, res) => {
@@ -134,17 +144,9 @@ app.get('/debug/env', (_req, res) => {
   });
 });
 
-/* ---------- Employment Page --------- */
-app.get('/employment.html', (_req, res) =>
-  res.sendFile(path.join(__dirname, 'public', 'employment.html'))
-);
-
-
 /* ---------- 404 fallback ---------- */
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 
 /* ---------- Start ---------- */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
-
-

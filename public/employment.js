@@ -1,4 +1,12 @@
 // public/employment.js
+// --- early auth gate ---
+const TOKEN_KEY = 'authToken';
+const hasToken = !!localStorage.getItem(TOKEN_KEY);
+if (!hasToken) {
+  window.location.replace('/login.html');
+  // prevent rest of script from rendering anything before redirect
+}
+
 const AUTH = '/api/auth';
 const API  = '/api/candidates';
 const TOKEN_KEY = 'authToken';
@@ -155,6 +163,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   logoutBtn?.addEventListener('click', () => {
+    localStorage.removeItem('authToken');
+    window.location.replace('/login.html');
     clearToken();
     CURRENT_USER = null;
     updateAuthUI();

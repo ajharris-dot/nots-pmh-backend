@@ -1,4 +1,12 @@
 console.log('app.js boot');
+// --- early auth gate ---
+const TOKEN_KEY = 'authToken';
+const hasToken = !!localStorage.getItem(TOKEN_KEY);
+if (!hasToken) {
+  window.location.replace('/login.html');
+  // prevent rest of script from rendering anything before redirect
+}
+
 fetch('/healthz').then(r=>console.log('healthz', r.status)).catch(console.error);
 fetch('/api/jobs').then(r=>r.text()).then(t=>console.log('/api/jobs sample:', t.slice(0,120)+'…')).catch(console.error);
 
@@ -515,6 +523,8 @@ async function loadCandidateOptions(){
   });
 
   logoutBtn?.addEventListener('click', async () => {
+    localStorage.removeItem('authToken');
+    window.location.replace('/login.html');
     clearToken();
     CURRENT_USER = null;
     updateUIAuth();
