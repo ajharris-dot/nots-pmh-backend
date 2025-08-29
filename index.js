@@ -6,7 +6,7 @@ const fs = require('fs');
 const multer = require('multer');
 const helmet = require('helmet');
 
-const db = require('./db'); // <-- needed for ability checks
+const db = require('./models/db'); // <-- needed for ability checks
 
 const authRoutes = require('./routes/authRoutes');
 const jobRoutes = require('./routes/jobRoutes');
