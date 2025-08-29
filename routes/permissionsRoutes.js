@@ -1,7 +1,7 @@
 // routes/permissionsRoutes.js
 const express = require('express');
 const router = express.Router();
-const db = require('../db');
+const db = require('../models/db');
 
 // A canonical set of permissions you actually use in the app.
 // Add/remove here to control what's available in the Admin Hub UI.
