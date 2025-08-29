@@ -63,12 +63,12 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // reveal overlay, then fade in (use RAF to ensure transition runs)
+    // Show overlay and fade IN to black+video
     overlay.classList.remove('hidden');
-    await nextFrame();
-    overlay.classList.add('show');  // CSS handles opacity: 0 -> 1
+    await new Promise(requestAnimationFrame);
+    overlay.classList.add('show'); // stays opaque
 
-    // Start video. If autoplay is blocked for any reason, just go in.
+    // Try to play; if blocked, just go in
     try {
       video.currentTime = 0;
       await video.play();
@@ -78,20 +78,14 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // When video finishes: fade out, then redirect
-    let finished = false;
-    const done = () => {
-      if (finished) return;
-      finished = true;
-      overlay.classList.add('fadeout'); // CSS opacity: 1 -> 0
-      setTimeout(() => window.location.replace('/'), 1000); // match CSS transition
-    };
+  // When video finishes, redirect immediately while overlay is still covering page
+  const go = () => window.location.replace('/');
+  video.onended = go;
 
-    video.onended = done;
+  // Safety fallback in case 'ended' never fires (e.g., stalled media)
+  setTimeout(go, 15000);
+}
 
-    // Safety fallback in case 'ended' never fires (max 15s)
-    setTimeout(done, 15000);
-  }
 
   function nextFrame() {
     return new Promise(requestAnimationFrame);
