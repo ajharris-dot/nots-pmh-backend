@@ -45,6 +45,21 @@
         <div id="usersList" class="users-list"></div>
       </section>
 
+      <!-- inside the Permissions section, just above <div id="permissionsList"> -->
+      <div class="section-toolbar" style="display:flex; gap:10px; flex-wrap:wrap; align items:center; margin-bottom:10px;">
+        <input id="permSearch" type="text" placeholder="Search abilities…" 
+               style="flex:1; min-width:220px; border:1px solid var(--line); border-radius:8px; padding:8px 10px;">
+        <input id="newRoleName" type="text" placeholder="New role (e.g., operations)"
+               style="min-width:220px; border:1px solid var(--line); border-radius:8px; padding:8px 10px;">
+        <button id="addRoleBtn" class="secondary">+ Add Role</button>
+        <input id="newAbilityName" type="text" placeholder="New ability (e.g., edit_job)"
+               style="min-width:240px; border:1px solid var(--line); border-radius:8px; padding:8px 10px;">
+        <button id="addAbilityBtn" class="secondary">+ Add Ability</button>
+      </div>
+
+<div id="permissionsList" class="permissions-grid"></div>
+
+
       <!-- Permissions -->
       <section class="section-card">
         <h3>Permissions</h3>

@@ -16,6 +16,7 @@ const authFetch = (url, opts = {}) => {
 let CURRENT_USER = null;
 let PERM_STATE = { roles: [], abilities: [], role_abilities: [] };
 let CURRENT_ROLE_SEL = null;
+let ABILITY_QUERY = ''; // search text
 
 document.addEventListener('DOMContentLoaded', () => {
   const backBtn = document.getElementById('backToHubBtn');
@@ -30,7 +31,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const userRoleEl = document.getElementById('userRole');
   const userPasswordEl = document.getElementById('userPassword');
 
-  // Early gate: must have token
+  // NEW catalog controls
+  const permSearch = document.getElementById('permSearch');
+  const newRoleName = document.getElementById('newRoleName');
+  const addRoleBtn = document.getElementById('addRoleBtn');
+  const newAbilityName = document.getElementById('newAbilityName');
+  const addAbilityBtn = document.getElementById('addAbilityBtn');
+
   if (!isAuthed()) {
     window.location.replace('/login.html');
     return;
@@ -61,7 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // ---------- Users ----------
+  /* ========== Users (unchanged) ========== */
   async function loadUsers() {
     try {
       const res = await authFetch(USERS, { method: 'GET' });
@@ -125,11 +132,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  function resetUserForm() {
+  resetUserFormBtn?.addEventListener('click', () => {
     userForm?.reset();
     if (userIdEl) userIdEl.value = '';
-  }
-  resetUserFormBtn?.addEventListener('click', resetUserForm);
+  });
 
   userForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -162,7 +168,8 @@ document.addEventListener('DOMContentLoaded', () => {
         alert(`Save failed: ${t || res.status}`);
         return;
       }
-      resetUserForm();
+      userForm.reset();
+      if (userIdEl) userIdEl.value = '';
       loadUsers();
     } catch (err) {
       console.error('save user error:', err);
@@ -170,7 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // ---------- Permissions ----------
+  /* ========== Permissions (enhanced) ========== */
   async function loadPermissions() {
     try {
       const res = await authFetch(PERMS, { method: 'GET' });
@@ -206,6 +213,55 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Add / remove roles & abilities (requires server routes below)
+  addRoleBtn?.addEventListener('click', async () => {
+    const val = (newRoleName?.value || '').trim().toLowerCase();
+    if (!val) return;
+    addRoleBtn.disabled = true;
+    try {
+      const res = await authFetch(`${PERMS}/roles`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: val })
+      });
+      if (!res.ok) {
+        const t = await res.text().catch(()=> '');
+        alert(`Add role failed: ${t || res.status}`);
+        return;
+      }
+      newRoleName.value = '';
+      await loadPermissions();
+      CURRENT_ROLE_SEL = val;
+      renderPermissionsUI();
+    } finally { addRoleBtn.disabled = false; }
+  });
+
+  addAbilityBtn?.addEventListener('click', async () => {
+    const val = (newAbilityName?.value || '').trim();
+    if (!val) return;
+    addAbilityBtn.disabled = true;
+    try {
+      const res = await authFetch(`${PERMS}/abilities`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ability: val })
+      });
+      if (!res.ok) {
+        const t = await res.text().catch(()=> '');
+        alert(`Add ability failed: ${t || res.status}`);
+        return;
+      }
+      newAbilityName.value = '';
+      await loadPermissions();
+      renderPermissionsUI();
+    } finally { addAbilityBtn.disabled = false; }
+  });
+
+  permSearch?.addEventListener('input', () => {
+    ABILITY_QUERY = (permSearch.value || '').toLowerCase().trim();
+    renderPermissionsUI();
+  });
+
   function renderPermissionsUI() {
     const { roles, abilities, role_abilities } = PERM_STATE;
 
@@ -214,6 +270,11 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     if (!CURRENT_ROLE_SEL) CURRENT_ROLE_SEL = roles[0];
+
+    // Filter abilities by search query
+    const visibleAbilities = abilities.filter(a =>
+      !ABILITY_QUERY || String(a).toLowerCase().includes(ABILITY_QUERY)
+    );
 
     const enabledSet = new Set(
       role_abilities.filter(x => x.role === CURRENT_ROLE_SEL).map(x => x.ability)
@@ -224,13 +285,18 @@ document.addEventListener('DOMContentLoaded', () => {
     wrap.style.gridTemplateColumns = '220px 1fr';
     wrap.style.gap = '14px';
 
-    // Roles column
+    // --- Roles column ---
     const rolesCol = document.createElement('div');
     rolesCol.style.display = 'grid';
     rolesCol.style.gridTemplateColumns = '1fr';
     rolesCol.style.gap = '8px';
 
     roles.forEach(role => {
+      const holder = document.createElement('div');
+      holder.style.display = 'grid';
+      holder.style.gridTemplateColumns = '1fr auto';
+      holder.style.gap = '6px';
+
       const btn = document.createElement('button');
       btn.className = 'secondary';
       btn.textContent = cap(role);
@@ -246,24 +312,58 @@ document.addEventListener('DOMContentLoaded', () => {
         CURRENT_ROLE_SEL = role;
         renderPermissionsUI();
       });
-      rolesCol.appendChild(btn);
+
+      const del = document.createElement('button');
+      del.className = 'danger';
+      del.textContent = '×';
+      del.title = 'Delete role';
+      del.addEventListener('click', async () => {
+        if (!confirm(`Delete role "${role}"? (This removes its mappings; users with this role must be reassigned)`)) return;
+        del.disabled = true;
+        try {
+          const res = await authFetch(`${PERMS}/roles`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role })
+          });
+          if (!res.ok) {
+            const t = await res.text().catch(()=> '');
+            alert(`Delete role failed: ${t || res.status}`);
+            return;
+          }
+          if (CURRENT_ROLE_SEL === role) CURRENT_ROLE_SEL = roles.find(r => r !== role) || null;
+          await loadPermissions();
+          renderPermissionsUI();
+        } finally { del.disabled = false; }
+      });
+
+      holder.appendChild(btn);
+      holder.appendChild(del);
+      rolesCol.appendChild(holder);
     });
 
-    // Abilities column
+    // --- Abilities column ---
     const abilCol = document.createElement('div');
     abilCol.style.display = 'grid';
     abilCol.style.gridTemplateColumns = '1fr';
     abilCol.style.gap = '8px';
 
     const title = document.createElement('div');
-    title.innerHTML = `<strong>${cap(CURRENT_ROLE_SEL)}</strong> abilities`;
+    title.innerHTML = `<strong>${cap(CURRENT_ROLE_SEL || '')}</strong> abilities`;
     title.style.marginBottom = '4px';
     abilCol.appendChild(title);
 
-    abilities.forEach(ability => {
+    if (!visibleAbilities.length) {
+      const empty = document.createElement('div');
+      empty.className = 'muted';
+      empty.textContent = ABILITY_QUERY ? 'No matches.' : 'No abilities yet.';
+      abilCol.appendChild(empty);
+    }
+
+    visibleAbilities.forEach(ability => {
       const row = document.createElement('label');
       row.style.display = 'grid';
-      row.style.gridTemplateColumns = '24px 1fr';
+      row.style.gridTemplateColumns = '24px 1fr auto';
       row.style.alignItems = 'center';
       row.style.gap = '10px';
       row.style.padding = '6px 8px';
@@ -290,10 +390,9 @@ document.addEventListener('DOMContentLoaded', () => {
           if (!res.ok) {
             const t = await res.text().catch(()=> '');
             alert(`Update failed: ${t || res.status}`);
-            e.target.checked = !enabled; // revert
+            e.target.checked = !enabled;
             return;
           }
-          // Update local state
           if (enabled) {
             PERM_STATE.role_abilities.push({ role: CURRENT_ROLE_SEL, ability });
           } else {
@@ -314,8 +413,31 @@ document.addEventListener('DOMContentLoaded', () => {
       labelText.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, monospace';
       labelText.textContent = ability;
 
+      const del = document.createElement('button');
+      del.className = 'danger';
+      del.textContent = 'Delete';
+      del.addEventListener('click', async () => {
+        if (!confirm(`Delete ability "${ability}" from the catalog? (This removes it from all roles)`)) return;
+        del.disabled = true;
+        try {
+          const res = await authFetch(`${PERMS}/abilities`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ability })
+          });
+          if (!res.ok) {
+            const t = await res.text().catch(()=> '');
+            alert(`Delete ability failed: ${t || res.status}`);
+            return;
+          }
+          await loadPermissions();
+          renderPermissionsUI();
+        } finally { del.disabled = false; }
+      });
+
       row.appendChild(box);
       row.appendChild(labelText);
+      row.appendChild(del);
       abilCol.appendChild(row);
     });
 
