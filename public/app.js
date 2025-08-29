@@ -765,7 +765,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.location.href = '/employment.html';
   });
 
-  // ---- Permissions (Roles -> Abilities) ----
+  // ---- Permissions (Roles -> Permissions) ----
   async function loadPermissions() {
     if (!isAuthed() || CURRENT_USER?.role !== 'admin') return;
     try {
@@ -777,23 +777,12 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       const raw = await res.json();
 
-      let roles = [];
-      let abilities = [];
-      let role_abilities = [];
+      // expected: { roles: string[], permissions: string[], role_permissions: [{role, permission}] }
+      const roles = raw.roles || [];
+      const permissions = raw.permissions || [];
+      const role_permissions = raw.role_permissions || [];
 
-      if (Array.isArray(raw)) {
-        roles = raw.map(r => r.role);
-        const set = new Set();
-        raw.forEach(r => (r.abilities || []).forEach(a => set.add(a)));
-        abilities = [...set];
-        raw.forEach(r => (r.abilities || []).forEach(a => role_abilities.push({ role: r.role, ability: a })));
-      } else {
-        roles = raw.roles || [];
-        abilities = raw.abilities || [];
-        role_abilities = raw.role_abilities || [];
-      }
-
-      PERM_STATE = { roles, abilities, role_abilities };
+      PERM_STATE = { roles, permissions, role_permissions };
       if (!CURRENT_ROLE_SEL && roles.length) CURRENT_ROLE_SEL = roles[0];
       renderPermissionsUI();
     } catch (e) {
@@ -803,16 +792,23 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderPermissionsUI() {
-    const { roles, abilities, role_abilities } = PERM_STATE;
+    const { roles, permissions, role_permissions } = PERM_STATE;
 
-    if (!roles.length || !abilities.length) {
-      permissionsList.innerHTML = `<div style="color:#6b7280">No roles/abilities found.</div>`;
+    if (!roles.length) {
+      permissionsList.innerHTML = `<div style="color:#6b7280">No roles found.</div>`;
+      return;
+    }
+    if (!permissions.length) {
+      permissionsList.innerHTML = `<div style="color:#6b7280">No permissions defined.</div>`;
       return;
     }
     if (!CURRENT_ROLE_SEL) CURRENT_ROLE_SEL = roles[0];
 
+    // fast lookup: which permissions are enabled for current role
     const enabledSet = new Set(
-      role_abilities.filter(x => x.role === CURRENT_ROLE_SEL).map(x => x.ability)
+      role_permissions
+        .filter(x => x.role === CURRENT_ROLE_SEL)
+        .map(x => x.permission)
     );
 
     const wrap = document.createElement('div');
@@ -820,6 +816,7 @@ document.addEventListener('DOMContentLoaded', () => {
     wrap.style.gridTemplateColumns = '220px 1fr';
     wrap.style.gap = '14px';
 
+    // Roles column
     const rolesCol = document.createElement('div');
     rolesCol.style.display = 'grid';
     rolesCol.style.gridTemplateColumns = '1fr';
@@ -828,7 +825,7 @@ document.addEventListener('DOMContentLoaded', () => {
     roles.forEach(role => {
       const btn = document.createElement('button');
       btn.className = 'secondary';
-      btn.textContent = cap(role);
+      btn.textContent = role.charAt(0).toUpperCase() + role.slice(1);
       btn.dataset.role = role;
       btn.style.textAlign = 'left';
       btn.style.width = '100%';
@@ -844,17 +841,18 @@ document.addEventListener('DOMContentLoaded', () => {
       rolesCol.appendChild(btn);
     });
 
-    const abilCol = document.createElement('div');
-    abilCol.style.display = 'grid';
-    abilCol.style.gridTemplateColumns = '1fr';
-    abilCol.style.gap = '8px';
+    // Permissions column (as checkboxes)
+    const permCol = document.createElement('div');
+    permCol.style.display = 'grid';
+    permCol.style.gridTemplateColumns = '1fr';
+    permCol.style.gap = '8px';
 
     const title = document.createElement('div');
-    title.innerHTML = `<strong>${cap(CURRENT_ROLE_SEL)}</strong> abilities`;
+    title.innerHTML = `<strong>${CURRENT_ROLE_SEL}</strong> permissions`;
     title.style.marginBottom = '4px';
-    abilCol.appendChild(title);
+    permCol.appendChild(title);
 
-    abilities.forEach(ability => {
+    permissions.forEach(permission => {
       const row = document.createElement('label');
       row.style.display = 'grid';
       row.style.gridTemplateColumns = '24px 1fr';
@@ -867,9 +865,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const box = document.createElement('input');
       box.type = 'checkbox';
-      box.checked = enabledSet.has(ability);
+      box.checked = enabledSet.has(permission);
       box.dataset.role = CURRENT_ROLE_SEL;
-      box.dataset.ability = ability;
+      box.dataset.permission = permission;
 
       box.addEventListener('change', async (e) => {
         const enabled = e.target.checked;
@@ -879,7 +877,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const res = await authFetch(PERMS, {
             method,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ role: CURRENT_ROLE_SEL, ability })
+            body: JSON.stringify({ role: CURRENT_ROLE_SEL, permission })
           });
           if (!res.ok) {
             const t = await res.text().catch(()=> '');
@@ -887,36 +885,38 @@ document.addEventListener('DOMContentLoaded', () => {
             e.target.checked = !enabled;
             return;
           }
+          // update local state
           if (enabled) {
-            PERM_STATE.role_abilities.push({ role: CURRENT_ROLE_SEL, ability });
+            PERM_STATE.role_permissions.push({ role: CURRENT_ROLE_SEL, permission });
           } else {
-            PERM_STATE.role_abilities = PERM_STATE.role_abilities.filter(
-              ra => !(ra.role === CURRENT_ROLE_SEL && ra.ability === ability)
-            );
+            PERM_STATE.role_permissions = PERM_STATE.role_permissions.filter(
+              rp => !(rp.role === CURRENT_ROLE_SEL && rp.permission === permission)
+           );
           }
-        } catch (err) {
-          console.error('toggle ability error:', err);
-          alert('Update failed (network).');
-          e.target.checked = !enabled;
-        } finally {
-          e.target.disabled = false;
-        }
-      });
+      } catch (err) {
+        console.error('toggle permission error:', err);
+        alert('Update failed (network).');
+        e.target.checked = !enabled;
+      } finally {
+        e.target.disabled = false;
+      }
+    });
 
-      const labelText = document.createElement('span');
+      labelText = document.createElement('span');
       labelText.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, monospace';
-      labelText.textContent = ability;
+      labelText.textContent = permission;
 
       row.appendChild(box);
       row.appendChild(labelText);
-      abilCol.appendChild(row);
+      permCol.appendChild(row);
     });
 
     wrap.appendChild(rolesCol);
-    wrap.appendChild(abilCol);
+    wrap.appendChild(permCol);
     permissionsList.innerHTML = '';
     permissionsList.appendChild(wrap);
   }
+
 
   function cap(s){ return String(s || '').replace(/^\w/, c => c.toUpperCase()); }
 
