@@ -44,6 +44,12 @@ app.use(express.json({ limit: '1mb' }));
 // Static site (login.html, index.html, employment.html, etc.)
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Admin Hub page
+app.get('/admin.html', (_req, res) =>
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'))
+);
+
+
 /* ---------- Role helper ---------- */
 function authorizeRoles(...roles) {
   return (req, res, next) => {

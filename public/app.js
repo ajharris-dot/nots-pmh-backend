@@ -643,11 +643,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Open Admin Hub (guarded)
-  adminHubBtn?.addEventListener('click', (e) => {
-    e.preventDefault();
-    if (!isAuthed()) { openLoginModal(); return; }
-    if (CURRENT_USER?.role !== 'admin') { alert('Admin only.'); return; }
-    openAdminHub();
+  adminHubBtn?.addEventListener('click', () => {
+    if (!CURRENT_USER || CURRENT_USER.role !== 'admin') { alert('Admins only.'); return; }
+    window.location.href = '/admin.html';
   });
 
   // ---- Users ----
