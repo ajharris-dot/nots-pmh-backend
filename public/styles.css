@@ -300,3 +300,21 @@ button:disabled{ opacity:0.55; cursor:not-allowed; }
 
 /* Small helper styles for inline notes/empty states */
 .muted { color: var(--muted); }
+
+.transition {
+  position: fixed;
+  inset: 0;
+  background: black;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+.transition video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.transition.hidden {
+  display: none;
+}

@@ -1,4 +1,3 @@
-// public/login.js
 const AUTH = '/api/auth';
 const TOKEN_KEY = 'authToken';
 
@@ -6,10 +5,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const form   = document.getElementById('loginForm');
   const email  = document.getElementById('loginEmail');
   const pass   = document.getElementById('loginPassword');
-  const cancel = document.getElementById('cancelLogin');
   const errEl  = document.getElementById('loginError');
+  const transition = document.getElementById('loginTransition');
+  const video = document.getElementById('transitionVideo');
 
-  // If already logged in, go home
   if (localStorage.getItem(TOKEN_KEY)) {
     window.location.replace('/');
     return;
@@ -42,17 +41,22 @@ document.addEventListener('DOMContentLoaded', () => {
         errEl.textContent = 'No token returned.';
         return;
       }
+
+      // Save token
       localStorage.setItem(TOKEN_KEY, data.token);
-      // go to main dashboard
-      window.location.replace('/');
+
+      // Show transition
+      transition.classList.remove('hidden');
+      video.currentTime = 0;
+      video.play();
+
+      // Redirect after video ends (or fallback timeout)
+      video.onended = () => window.location.replace('/');
+      setTimeout(() => window.location.replace('/'), 4000); // fallback 4s
+
     } catch (err) {
       console.error('login error', err);
       errEl.textContent = 'Network error. Please try again.';
     }
-  });
-
-  cancel?.addEventListener('click', () => {
-    // optional: clear fields
-    form?.reset();
   });
 });
