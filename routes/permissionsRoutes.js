@@ -3,8 +3,10 @@ const express = require('express');
 const router = express.Router();
 const db = require('../models/db');
 
-// A canonical set of permissions you actually use in the app.
-// Add/remove here to control what's available in the Admin Hub UI.
+// Canonical roles you support in the app UI. Add/remove as needed.
+const CANONICAL_ROLES = ['admin', 'operations', 'employment', 'manager', 'user'];
+
+// Canonical permissions used by your client. Edit to match your app.
 const CANONICAL_PERMS = [
   // Jobs
   'create_job', 'edit_job', 'delete_job',
@@ -12,33 +14,47 @@ const CANONICAL_PERMS = [
   // Candidates (employment area)
   'candidate_create', 'candidate_edit', 'candidate_delete',
   'candidate_advance', 'candidate_revert',
-  // Admin areas
+  // Admin
   'manage_users', 'manage_permissions'
 ];
 
-// GET /api/permissions
-// -> { roles: string[], permissions: string[], role_permissions: [{role, permission}] }
+// Build role set without requiring a `roles` table
+async function getAllRoles() {
+  const roles = new Set(CANONICAL_ROLES);
+
+  try {
+    const u = await db.query(`SELECT DISTINCT role FROM users WHERE role IS NOT NULL`);
+    u.rows.forEach(r => roles.add(r.role));
+  } catch (_) {}
+
+  try {
+    const rp = await db.query(`SELECT DISTINCT role FROM role_permissions WHERE role IS NOT NULL`);
+    rp.rows.forEach(r => roles.add(r.role));
+  } catch (_) {}
+
+  return Array.from(roles).sort();
+}
+
+async function getAllPermissions() {
+  const perms = new Set(CANONICAL_PERMS);
+  try {
+    const d = await db.query(`SELECT DISTINCT ability_key FROM role_permissions WHERE ability_key IS NOT NULL`);
+    d.rows.forEach(r => perms.add(r.ability_key));
+  } catch (_) {}
+  return Array.from(perms).sort();
+}
+
+// GET -> { roles, permissions, role_permissions:[{role, permission}] }
 router.get('/', async (_req, res) => {
   try {
-    // roles
-    const rolesQ = await db.query(`SELECT role FROM roles ORDER BY role`);
-
-    // union of canonical + anything already in DB
-    const distinctQ = await db.query(
-      `SELECT DISTINCT ability_key FROM role_permissions ORDER BY ability_key`
-    );
-    const fromDb = distinctQ.rows.map(r => r.ability_key);
-    const permissions = Array.from(new Set([...CANONICAL_PERMS, ...fromDb])).sort();
-
-    // mapping
-    const mappingQ = await db.query(
-      `SELECT role, ability_key AS permission
-         FROM role_permissions
-        ORDER BY role, ability_key`
-    );
+    const [roles, permissions, mappingQ] = await Promise.all([
+      getAllRoles(),
+      getAllPermissions(),
+      db.query(`SELECT role, ability_key AS permission FROM role_permissions ORDER BY role, ability_key`)
+    ]);
 
     res.json({
-      roles: rolesQ.rows.map(r => r.role),
+      roles,
       permissions,
       role_permissions: mappingQ.rows
     });
@@ -48,16 +64,19 @@ router.get('/', async (_req, res) => {
   }
 });
 
-// POST /api/permissions  { role, permission } -> grant
+// POST { role, permission } -> grant
 router.post('/', async (req, res) => {
   const role = String(req.body?.role || '').trim();
   const permission = String(req.body?.permission || '').trim();
   if (!role || !permission) return res.status(400).json({ error: 'role and permission are required' });
 
   try {
-    // validate role exists
-    const rOk = await db.query(`SELECT 1 FROM roles WHERE role = $1`, [role]);
-    if (!rOk.rowCount) return res.status(400).json({ error: 'unknown role' });
+    const roles = await getAllRoles();
+    if (!roles.includes(role)) {
+      // allow creating a brand-new role name by granting it first time
+      // comment the next line if you want to allow ANY new role names without warning:
+      // return res.status(400).json({ error: 'unknown role' });
+    }
 
     await db.query(
       `INSERT INTO role_permissions (role, ability_key)
@@ -72,7 +91,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// DELETE /api/permissions  { role, permission } -> revoke
+// DELETE { role, permission } -> revoke
 router.delete('/', async (req, res) => {
   const role = String(req.body?.role || '').trim();
   const permission = String(req.body?.permission || '').trim();
@@ -80,9 +99,7 @@ router.delete('/', async (req, res) => {
 
   try {
     const del = await db.query(
-      `DELETE FROM role_permissions
-        WHERE role = $1
-          AND ability_key = $2`,
+      `DELETE FROM role_permissions WHERE role = $1 AND ability_key = $2`,
       [role, permission]
     );
     if (!del.rowCount) return res.status(404).json({ error: 'not found' });
