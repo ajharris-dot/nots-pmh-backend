@@ -6,11 +6,12 @@ const fs = require('fs');
 const multer = require('multer');
 const helmet = require('helmet');
 
+const db = require('./db'); // <-- needed for ability checks
+
 const authRoutes = require('./routes/authRoutes');
 const jobRoutes = require('./routes/jobRoutes');
 const usersRoutes = require('./routes/usersRoutes');
 const authMiddleware = require('./middleware/authMiddleware');
-
 const permissionsRoutes = require('./routes/permissionsRoutes');
 const candidatesRoutes = require('./routes/candidatesRoutes');
 
@@ -34,23 +35,22 @@ app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors({
   origin: true,
-  credentials: false, // using JWT, not cookies
+  credentials: false, // JWT, not cookies
   allowedHeaders: ['Content-Type', 'Authorization'],
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']
 }));
 app.options('*', cors());
 app.use(express.json({ limit: '1mb' }));
 
-// Static site (login.html, index.html, employment.html, etc.)
+// Static site (login.html, index.html, employment.html, admin.html, etc.)
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Admin Hub page
+// Admin Hub page (static HTML)
 app.get('/admin.html', (_req, res) =>
   res.sendFile(path.join(__dirname, 'public', 'admin.html'))
 );
 
-
-/* ---------- Role helper ---------- */
+/* ---------- Helpers ---------- */
 function authorizeRoles(...roles) {
   return (req, res, next) => {
     const role = req.user?.role;
@@ -61,66 +61,110 @@ function authorizeRoles(...roles) {
   };
 }
 
+// Ability-based gate (backs Admin Hub changes)
+function authorizeAbility(abilityKey) {
+  return async (req, res, next) => {
+    try {
+      const role = req.user?.role;
+      if (!role) return res.status(401).json({ error: 'unauthorized' });
+
+      // Admin bypass (keep if you want admin to be superuser)
+      if (role === 'admin') return next();
+
+      const q = `
+        SELECT 1
+        FROM role_permissions
+        WHERE role = $1 AND ability_key = $2
+        LIMIT 1
+      `;
+      const r = await db.query(q, [role, abilityKey]);
+      if (r.rowCount) return next();
+
+      return res.status(403).json({ error: 'forbidden' });
+    } catch (err) {
+      console.error('authorizeAbility error', err);
+      return res.status(500).json({ error: 'server_error' });
+    }
+  };
+}
+
 /* ---------- Routes ---------- */
 // Auth
 app.use('/api/auth', authRoutes);
 
-/* Jobs:
-// We keep the role gates for write operations,
-// AND we now require auth for *all* /api/jobs (including GET) below. */
+/* ===== Jobs =====
+   All GETs require auth (so the app is private).
+   Each write maps to a specific ability key.
+*/
+app.use('/api/jobs', authMiddleware); // auth for all job routes (GET/POST/etc.)
 
-// Pre-route gates for specific actions (pass-through -> next())
-app.post(
-  '/api/jobs',
-  authMiddleware,
-  authorizeRoles('admin', 'operations'),
+// Pre-route guards for writes (then pass through to jobRoutes handlers)
+app.post('/api/jobs',
+  authorizeAbility('job_create'),
+  (req, _res, next) => next()
+);
+app.patch('/api/jobs/:id',
+  authorizeAbility('job_edit'),
+  (req, _res, next) => next()
+);
+app.delete('/api/jobs/:id',
+  authorizeAbility('job_delete'),
+  (req, _res, next) => next()
+);
+app.post('/api/jobs/:id/assign',
+  authorizeAbility('job_assign'),
+  (req, _res, next) => next()
+);
+app.post('/api/jobs/:id/unassign',
+  authorizeAbility('job_unassign'),
   (req, _res, next) => next()
 );
 
-app.patch(
-  '/api/jobs/:id',
-  authMiddleware,
-  authorizeRoles('admin'),
-  (req, _res, next) => next()
-);
+// Finally mount jobs router
+app.use('/api/jobs', jobRoutes);
 
-app.delete(
-  '/api/jobs/:id',
-  authMiddleware,
-  authorizeRoles('admin'),
-  (req, _res, next) => next()
-);
-
-app.post(
-  '/api/jobs/:id/assign',
-  authMiddleware,
-  authorizeRoles('admin', 'employment'),
-  (req, _res, next) => next()
-);
-
-app.post(
-  '/api/jobs/:id/unassign',
-  authMiddleware,
-  authorizeRoles('admin', 'employment'),
-  (req, _res, next) => next()
-);
-
-// Now mount the jobs router behind auth so even GETs require login
-app.use('/api/jobs', authMiddleware, jobRoutes);
-
-// Admin-only Users portal
+/* ===== Users (Admin only) ===== */
 app.use('/api/users', authMiddleware, authorizeRoles('admin'), usersRoutes);
 
-// Admin-only Permissions
+/* ===== Permissions (Admin only) ===== */
 app.use('/api/permissions', authMiddleware, authorizeRoles('admin'), permissionsRoutes);
 
-// Employment: Candidates management (admin + employment)
-app.use('/api/candidates', authMiddleware, authorizeRoles('admin', 'employment'), candidatesRoutes);
+/* ===== Candidates =====
+   Protect with abilities so Admin Hub choices matter:
+   - candidate_view
+   - candidate_create
+   - candidate_edit
+   - candidate_delete
+*/
+app.get('/api/candidates',
+  authMiddleware,
+  authorizeAbility('candidate_view'),
+  (req, _res, next) => next()
+);
+app.post('/api/candidates',
+  authMiddleware,
+  authorizeAbility('candidate_create'),
+  (req, _res, next) => next()
+);
+app.patch('/api/candidates/:id',
+  authMiddleware,
+  authorizeAbility('candidate_edit'),
+  (req, _res, next) => next()
+);
+app.delete('/api/candidates/:id',
+  authMiddleware,
+  authorizeAbility('candidate_delete'),
+  (req, _res, next) => next()
+);
 
-// Protected upload (admins + employment can upload photos)
+// Mount candidates router after guards
+app.use('/api/candidates', candidatesRoutes);
+
+/* ===== Upload (Admin + Employment) ===== */
 app.post(
   '/api/upload',
   authMiddleware,
+  // you can keep roles here or map to a specific ability like 'job_upload_photo'
   authorizeRoles('admin', 'employment'),
   upload.single('photo'),
   (req, res) => {
@@ -133,7 +177,7 @@ app.post(
 /* ---------- Health + HTML ---------- */
 app.get('/healthz', (_req, res) => res.status(200).json({ ok: true }));
 
-// These serve the SPA pages; client-side JS will redirect to /login.html if no token
+// SPA pages; client JS will redirect to /login.html if no token
 app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/employment.html', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'employment.html')));
 app.get('/login.html', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));

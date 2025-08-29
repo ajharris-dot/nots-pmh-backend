@@ -27,8 +27,11 @@ let CURRENT_USER = null;
 const VIEW_KEY = 'pmhViewMode';
 let VIEW_MODE = (localStorage.getItem(VIEW_KEY) || 'card');
 
-// ---- Admin Hub permission state ----
-let PERM_STATE = { roles: [], abilities: [], role_abilities: [] };
+// ---- Ability state (populated from /api/permissions/mine if available) ----
+let MY_PERMS = new Set(); // strings like 'job_create', 'job_edit', etc.
+
+// ---- Admin Hub permission state (for the modal UI only) ----
+let PERM_STATE = { roles: [], permissions: [], role_permissions: [] };
 let CURRENT_ROLE_SEL = null;
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -147,17 +150,39 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  /* ------- Role rules (UI + client guard) ------- */
-  function can(action) {
+  // Try to load the current user's permissions (ability keys).
+  // If the endpoint doesn't exist / not allowed, we just fall back to role heuristics.
+  async function fetchMyPermissions() {
+    MY_PERMS = new Set();
+    if (!isAuthed()) return;
+    try {
+      const r = await authFetch(`/api/permissions/mine`);
+      if (r.ok) {
+        const j = await r.json();
+        const list = Array.isArray(j?.permissions) ? j.permissions : [];
+        list.forEach(p => MY_PERMS.add(String(p)));
+      } else {
+        // silently ignore; backend will still enforce
+      }
+    } catch (e) {
+      // ignore; backend will still enforce
+    }
+  }
+
+  /* ------- Ability checks (UI + client guard) ------- */
+  // ability keys: 'job_create','job_edit','job_delete','job_assign','job_unassign'
+  function can(abilityKey) {
     const role = CURRENT_USER?.role;
     if (!role) return false;
-    if (role === 'admin') return true;
+    if (role === 'admin') return true; // superuser
+    if (MY_PERMS.size) return MY_PERMS.has(abilityKey);
 
-    const EMPLOYMENT = ['assign', 'unassign', 'upload_photo'];
-    const OPERATIONS = ['create_job', 'edit_job', 'delete_job'];
-    if (role === 'employment') return EMPLOYMENT.includes(action);
-    if (role === 'operations') return OPERATIONS.includes(action);
-    return false;
+    // Legacy fallback (if /api/permissions/mine is unavailable):
+    const FALLBACK = {
+      employment: new Set(['job_assign','job_unassign']),  // and upload handled separately
+      operations: new Set(['job_create','job_edit','job_delete'])
+    };
+    return FALLBACK[role]?.has(abilityKey) || false;
   }
 
   function openLoginModal(){
@@ -181,8 +206,8 @@ document.addEventListener('DOMContentLoaded', () => {
       logoutBtn?.setAttribute('style', 'display:none');
     }
 
-    // Add Position button only for roles that can create
-    if (authed && can('create_job')) {
+    // Add Position button only for roles/abilities that can create
+    if (authed && can('job_create')) {
       addJobBtn?.removeAttribute('disabled');
       addJobBtn?.setAttribute('style', '');
     } else {
@@ -190,7 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
       addJobBtn?.setAttribute('style', 'display:none');
     }
 
-    // Admin-only Admin Hub button
+    // Admin-only Admin Hub button (still admin-gated)
     if (authed && CURRENT_USER?.role === 'admin') {
       adminHubBtn?.setAttribute('style', '');
     } else {
@@ -204,7 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
       employmentPageBtn?.setAttribute('style', 'display:none');
     }
 
-    render(); // re-render UI actions per role
+    render(); // re-render UI actions per role/abilities
   }
 
   /* ------- View toggle helpers ------- */
@@ -297,23 +322,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  /* ------- shared actions builder (role-aware) ------- */
+  /* ------- shared actions builder (ability-aware) ------- */
   function buildActionsHtml(job) {
-    const role = CURRENT_USER?.role || null;
-    const authed = !!role;
-
-    const canAssign = role === 'admin' || role === 'employment';
-    const canEdit   = role === 'admin' || role === 'operations';
-    const canDelete = role === 'admin' || role === 'operations';
-    const canUpload = (role === 'admin' || role === 'employment') && isFilled(job);
-
-    const inputId = `file_${job.id}`;
-
+    const authed = !!CURRENT_USER;
     if (!authed) {
       return `<button class="secondary login-gate-btn" data-action="open-login">Log in to manage</button>`;
     }
 
+    const canAssign = can('job_assign');
+    const canEdit   = can('job_edit');
+    const canDelete = can('job_delete');
+    // Upload photo still gated by role server-side; keep same UI rule as before:
+    const canUpload = (CURRENT_USER?.role === 'admin' || CURRENT_USER?.role === 'employment') && isFilled(job);
+
+    const inputId = `file_${job.id}`;
     const parts = [];
+
     if (isFilled(job)) {
       if (canUpload) parts.push(
         `<button class="upload-btn" data-action="trigger-upload" data-input="${inputId}">Upload Photo</button>`
@@ -470,7 +494,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   addJobBtn?.addEventListener('click', () => {
     if (!isAuthed()) { openLoginModal(); return; }
-    if (!can('create_job')) return;
+    if (!can('job_create')) return;
     openModal();
   });
   cancelModal?.addEventListener('click', closeModal);
@@ -501,6 +525,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (data?.token) {
         setToken(data.token);
         await fetchMe();
+        await fetchMyPermissions(); // <- pick up abilities for UI
         closeLoginModal();
         updateUIAuth();
         loadJobs();
@@ -516,6 +541,7 @@ document.addEventListener('DOMContentLoaded', () => {
   logoutBtn?.addEventListener('click', async () => {
     clearToken();
     CURRENT_USER = null;
+    MY_PERMS = new Set();
     window.location.replace('/login.html');
   });
 
@@ -538,21 +564,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!id && action !== 'edit') return;
 
     if (action === 'edit') {
-      if (!isAuthed() || !(CURRENT_USER?.role === 'admin' || CURRENT_USER?.role === 'operations')) return;
+      if (!isAuthed() || !can('job_edit')) return;
       const job = ALL_JOBS.find(j => j.id == id);
       openModal(job);
 
     } else if (action === 'delete') {
-      if (!isAuthed() || !(CURRENT_USER?.role === 'admin' || CURRENT_USER?.role === 'operations')) return;
+      if (!isAuthed() || !can('job_delete')) return;
       await authFetch(`${API}/${id}`, { method: 'DELETE' });
       loadJobs();
 
     } else if (action === 'assign') {
-      if (!isAuthed() || !(CURRENT_USER?.role === 'admin' || CURRENT_USER?.role === 'employment')) { openLoginModal(); return; }
+      if (!isAuthed() || !can('job_assign')) { openLoginModal(); return; }
       openAssignModal(id);
 
     } else if (action === 'unassign') {
-      if (!isAuthed() || !(CURRENT_USER?.role === 'admin' || CURRENT_USER?.role === 'employment')) return;
+      if (!isAuthed() || !can('job_unassign')) return;
       await authFetch(`${API}/${id}/unassign`, { method: 'POST' });
       loadJobs();
     }
@@ -562,10 +588,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Assign modal
   assignForm?.addEventListener('submit', async (e)=>{
     e.preventDefault();
-    if (!isAuthed() || !(CURRENT_USER?.role === 'admin' || CURRENT_USER?.role === 'employment')) {
-      openLoginModal(); 
-      return;
-    }
+    if (!isAuthed() || !can('job_assign')) { openLoginModal(); return; }
     if (!ASSIGN_JOB_ID) return;
 
     const opt = assignSelect?.selectedOptions?.[0];
@@ -588,9 +611,8 @@ document.addEventListener('DOMContentLoaded', () => {
   jobForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const id = document.getElementById('jobId').value;
-    const role = CURRENT_USER?.role;
-    const canCreate = role === 'admin' || role === 'operations';
-    const canEdit   = role === 'admin' || role === 'operations';
+    const canCreate = can('job_create');
+    const canEdit   = can('job_edit');
     if (!isAuthed() || (!id && !canCreate) || (id && !canEdit)) { openLoginModal(); return; }
 
     const rawDate = document.getElementById('dueDate').value;
@@ -620,7 +642,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /* =========================
-     ADMIN HUB
+     ADMIN HUB (modal entry still present; real page is /admin.html)
      ========================= */
   function openAdminHub() {
     adminHubModal?.classList.remove('hidden');
@@ -891,18 +913,18 @@ document.addEventListener('DOMContentLoaded', () => {
           } else {
             PERM_STATE.role_permissions = PERM_STATE.role_permissions.filter(
               rp => !(rp.role === CURRENT_ROLE_SEL && rp.permission === permission)
-           );
+            );
           }
-      } catch (err) {
-        console.error('toggle permission error:', err);
-        alert('Update failed (network).');
-        e.target.checked = !enabled;
-      } finally {
-        e.target.disabled = false;
-      }
-    });
+        } catch (err) {
+          console.error('toggle permission error:', err);
+          alert('Update failed (network).');
+          e.target.checked = !enabled;
+        } finally {
+          e.target.disabled = false;
+        }
+      });
 
-      labelText = document.createElement('span');
+      const labelText = document.createElement('span');
       labelText.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, monospace';
       labelText.textContent = permission;
 
@@ -917,12 +939,12 @@ document.addEventListener('DOMContentLoaded', () => {
     permissionsList.appendChild(wrap);
   }
 
-
   function cap(s){ return String(s || '').replace(/^\w/, c => c.toUpperCase()); }
 
   // Upload change -> patch job (guarded)
   const jobGridChange = async (e) => {
     if (!e.target.classList.contains('photo-input')) return;
+    // upload still role-guarded on server; keep legacy client check
     const role = CURRENT_USER?.role;
     const canUpload = role === 'admin' || role === 'employment';
     if (!isAuthed() || !canUpload) { openLoginModal(); return; }
@@ -950,6 +972,7 @@ document.addEventListener('DOMContentLoaded', () => {
   (async () => {
     syncViewToggle();
     await fetchMe();
+    await fetchMyPermissions(); // pull ability keys so UI reflects Admin Hub changes
     updateUIAuth();
     loadJobs();
   })();
