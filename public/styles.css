@@ -318,3 +318,31 @@ button:disabled{ opacity:0.55; cursor:not-allowed; }
 .transition.hidden {
   display: none;
 }
+
+/* Transition overlay */
+#loginTransition {
+  position: fixed;
+  inset: 0;
+  background: black;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  opacity: 0; /* start hidden */
+  pointer-events: none;
+  transition: opacity 1s ease; /* fade in/out timing */
+}
+
+#loginTransition video {
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
+}
+#loginTransition.show {
+  opacity: 1; /* fade in */
+  pointer-events: auto;
+}
+#loginTransition.fadeout {
+  opacity: 0; /* fade out */
+  pointer-events: none;
+}
