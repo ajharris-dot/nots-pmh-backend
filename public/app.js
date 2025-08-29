@@ -1,29 +1,31 @@
 console.log('app.js boot');
+
 // --- early auth gate ---
 const TOKEN_KEY = 'authToken';
-const hasToken = !!localStorage.getItem(TOKEN_KEY);
-if (!hasToken) {
+if (!localStorage.getItem(TOKEN_KEY)) {
   window.location.replace('/login.html');
-  // prevent rest of script from rendering anything before redirect
+  // stop executing the rest of this file on the protected page
+  throw new Error('redirecting-to-login');
 }
 
-fetch('/healthz').then(r=>console.log('healthz', r.status)).catch(console.error);
-fetch('/api/jobs').then(r=>r.text()).then(t=>console.log('/api/jobs sample:', t.slice(0,120)+'…')).catch(console.error);
+// (keep these after the gate)
+fetch('/healthz')
+  .then(r => console.log('healthz', r.status))
+  .catch(console.error);
 
 const API = '/api/jobs';
 const AUTH = '/api/auth';
 const USERS = '/api/users';
 const PERMS = '/api/permissions';
 const PLACEHOLDER = './placeholder-v2.png?v=20250814';
-const TOKEN_KEY = 'authToken';
 
 let ALL_JOBS = [];
 let CURRENT_FILTER = 'all';
-let CURRENT_USER = null; // { id, email, name, role } or null
+let CURRENT_USER = null;
 
 // ---- View toggle state ----
 const VIEW_KEY = 'pmhViewMode';
-let VIEW_MODE = (localStorage.getItem(VIEW_KEY) || 'card'); // 'card' | 'list'
+let VIEW_MODE = (localStorage.getItem(VIEW_KEY) || 'card');
 
 // ---- Admin Hub permission state ----
 let PERM_STATE = { roles: [], abilities: [], role_abilities: [] };
@@ -50,7 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const adminHubBtn = document.getElementById('adminHubBtn');
   const adminHubModal = document.getElementById('adminHubModal');
   const closeAdminHubBtn = document.getElementById('closeAdminHub');
-  const permissionsList = document.getElementById('permissionsList'); // <-- keep only this one
+  const permissionsList = document.getElementById('permissionsList');
 
   // Users sub-section
   const userForm = document.getElementById('userForm');
@@ -73,14 +75,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const assignModal  = document.getElementById('assignModal');
   const assignForm   = document.getElementById('assignForm');
   const cancelAssign = document.getElementById('cancelAssign');
-  const assignSelect = document.getElementById('assignCandidate'); // <- NEW
+  const assignSelect = document.getElementById('assignCandidate');
   let ASSIGN_JOB_ID = null;
 
   function openAssignModal(jobId){
     ASSIGN_JOB_ID = jobId;
     assignForm?.reset();
     assignModal?.classList.remove('hidden');
-    // Load candidates list each time to stay fresh
     loadCandidateOptions().then(() => assignSelect?.focus());
   }
   function closeAssignModal(){
@@ -88,44 +89,38 @@ document.addEventListener('DOMContentLoaded', () => {
     assignModal?.classList.add('hidden');
   }
 
-/** Populate the Assign dropdown from /api/candidates (admin/employment only) */
-async function loadCandidateOptions(){
-  if (!assignSelect) return;
-  assignSelect.innerHTML = `<option value="" disabled selected>Loading…</option>`;
-  try {
-    const res = await authFetch('/api/candidates');
-    if (!res.ok) {
-      const t = await res.text().catch(()=> '');
-      assignSelect.innerHTML = `<option value="" disabled selected>Failed to load candidates</option>`;
-      console.error('loadCandidateOptions failed:', res.status, t);
-      return;
-    }
-    const list = await res.json();
+  /** Populate the Assign dropdown from /api/candidates (admin/employment only) */
+  async function loadCandidateOptions(){
+    if (!assignSelect) return;
+    assignSelect.innerHTML = `<option value="" disabled selected>Loading…</option>`;
+    try {
+      const res = await authFetch('/api/candidates');
+      if (!res.ok) {
+        const t = await res.text().catch(()=> '');
+        assignSelect.innerHTML = `<option value="" disabled selected>Failed to load candidates</option>`;
+        console.error('loadCandidateOptions failed:', res.status, t);
+        return;
+      }
+      const list = await res.json();
+      const filtered = Array.isArray(list) ? [...list] : [];
+      filtered.sort((a,b) => String(a.full_name||'').localeCompare(String(b.full_name||'')));
 
-    // Sort by name; you can also filter by status if you only want certain stages:
-    // e.g. const filtered = list.filter(c => c.status !== 'did_not_start');
-    const filtered = Array.isArray(list) ? [...list] : [];
-    filtered.sort((a,b) => String(a.full_name||'').localeCompare(String(b.full_name||'')));
+      assignSelect.innerHTML = filtered.length
+        ? `<option value="" disabled selected>Select a candidate…</option>`
+        : `<option value="" disabled selected>No candidates found</option>`;
 
-    if (!filtered.length) {
-      assignSelect.innerHTML = `<option value="" disabled selected>No candidates found</option>`;
-      return;
+      for (const c of filtered) {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.full_name || '(Unnamed)';
+        opt.dataset.name = c.full_name || '';
+        assignSelect.appendChild(opt);
+      }
+    } catch (err) {
+      console.error('loadCandidateOptions threw:', err);
+      assignSelect.innerHTML = `<option value="" disabled selected>Error loading candidates</option>`;
     }
-
-    assignSelect.innerHTML = `<option value="" disabled selected>Select a candidate…</option>`;
-    for (const c of filtered) {
-      const opt = document.createElement('option');
-      opt.value = c.id;                         // keep id as value (future-proof)
-      opt.textContent = c.full_name || '(Unnamed)';
-      opt.dataset.name = c.full_name || '';
-      assignSelect.appendChild(opt);
-    }
-  } catch (err) {
-    console.error('loadCandidateOptions threw:', err);
-    assignSelect.innerHTML = `<option value="" disabled selected>Error loading candidates</option>`;
   }
-}
-
 
   /* ------- Auth helpers ------- */
   const getToken = () => localStorage.getItem(TOKEN_KEY) || '';
@@ -158,12 +153,10 @@ async function loadCandidateOptions(){
     if (!role) return false;
     if (role === 'admin') return true;
 
-    // NOTE: these remain hard-coded on client; Admin Hub changes are stored server-side.
     const EMPLOYMENT = ['assign', 'unassign', 'upload_photo'];
     const OPERATIONS = ['create_job', 'edit_job', 'delete_job'];
     if (role === 'employment') return EMPLOYMENT.includes(action);
     if (role === 'operations') return OPERATIONS.includes(action);
-    // managers/users = view-only
     return false;
   }
 
@@ -275,7 +268,7 @@ async function loadCandidateOptions(){
       if (String(CURRENT_FILTER || 'all').toLowerCase() !== 'all') {
         params.set('status', String(CURRENT_FILTER).toLowerCase());
       }
-      const res = await fetch(`${API}?${params.toString()}`);
+      const res = await authFetch(`${API}?${params.toString()}`); // <-- authFetch
       if (!res.ok) {
         const msg = await res.text().catch(()=> '');
         console.error('Failed to fetch jobs:', res.status, msg);
@@ -364,7 +357,6 @@ async function loadCandidateOptions(){
         return;
       }
 
-      // Switch grid class for view
       jobGrid.classList.toggle('card-grid', VIEW_MODE === 'card');
       jobGrid.classList.toggle('list-grid', VIEW_MODE === 'list');
 
@@ -383,7 +375,6 @@ async function loadCandidateOptions(){
         const actionsHtml = buildActionsHtml(job);
 
         if (VIEW_MODE === 'list') {
-          // ---------- LIST ROW ----------
           const row = document.createElement('div');
           row.className = 'job-row';
           row.innerHTML = `
@@ -411,7 +402,6 @@ async function loadCandidateOptions(){
           `;
           jobGrid.appendChild(row);
         } else {
-          // ---------- CARD ----------
           const card = document.createElement('div');
           card.className = 'job-card';
           card.innerHTML = `
@@ -480,7 +470,7 @@ async function loadCandidateOptions(){
 
   addJobBtn?.addEventListener('click', () => {
     if (!isAuthed()) { openLoginModal(); return; }
-    if (!can('create_job')) return; // guard
+    if (!can('create_job')) return;
     openModal();
   });
   cancelModal?.addEventListener('click', closeModal);
@@ -513,6 +503,7 @@ async function loadCandidateOptions(){
         await fetchMe();
         closeLoginModal();
         updateUIAuth();
+        loadJobs();
       } else {
         alert('Login failed: no token returned');
       }
@@ -523,11 +514,9 @@ async function loadCandidateOptions(){
   });
 
   logoutBtn?.addEventListener('click', async () => {
-    localStorage.removeItem('authToken');
-    window.location.replace('/login.html');
     clearToken();
     CURRENT_USER = null;
-    updateUIAuth();
+    window.location.replace('/login.html');
   });
 
   // Card/List button clicks with guards
@@ -582,19 +571,17 @@ async function loadCandidateOptions(){
     const opt = assignSelect?.selectedOptions?.[0];
     if (!opt || !opt.value) return;
 
-  // We keep backend unchanged: send the candidate's name as "employee"
-  const employeeName = opt.dataset.name || opt.textContent || '';
+    const employeeName = opt.dataset.name || opt.textContent || '';
 
-  await authFetch(`/api/jobs/${ASSIGN_JOB_ID}/assign`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({ employee: employeeName })
+    await authFetch(`/api/jobs/${ASSIGN_JOB_ID}/assign`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ employee: employeeName })
+    });
+
+    closeAssignModal();
+    loadJobs();
   });
-
-  closeAssignModal();
-  loadJobs();
-});
-
   cancelAssign?.addEventListener('click', closeAssignModal);
 
   // Create / Update job with guard
@@ -655,13 +642,13 @@ async function loadCandidateOptions(){
     }
   });
 
-// Open Admin Hub (guarded)
-adminHubBtn?.addEventListener('click', (e) => {
-  e.preventDefault();
-  if (!isAuthed()) { openLoginModal(); return; }
-  if (CURRENT_USER?.role !== 'admin') { alert('Admin only.'); return; }
-  openAdminHub();
-});
+  // Open Admin Hub (guarded)
+  adminHubBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (!isAuthed()) { openLoginModal(); return; }
+    if (CURRENT_USER?.role !== 'admin') { alert('Admin only.'); return; }
+    openAdminHub();
+  });
 
   // ---- Users ----
   async function loadUsers() {
@@ -775,7 +762,7 @@ adminHubBtn?.addEventListener('click', (e) => {
     }
   });
 
-  // Employment Button Listener (show only on pages that include the button)
+  // Employment Button Listener
   employmentPageBtn?.addEventListener('click', () => {
     window.location.href = '/employment.html';
   });
@@ -792,20 +779,17 @@ adminHubBtn?.addEventListener('click', (e) => {
       }
       const raw = await res.json();
 
-      // Normalize both possible API shapes
       let roles = [];
       let abilities = [];
       let role_abilities = [];
 
       if (Array.isArray(raw)) {
-        // Old shape: [{ role, abilities: [...] }, ...]
         roles = raw.map(r => r.role);
         const set = new Set();
         raw.forEach(r => (r.abilities || []).forEach(a => set.add(a)));
         abilities = [...set];
         raw.forEach(r => (r.abilities || []).forEach(a => role_abilities.push({ role: r.role, ability: a })));
       } else {
-        // New shape
         roles = raw.roles || [];
         abilities = raw.abilities || [];
         role_abilities = raw.role_abilities || [];
@@ -829,18 +813,15 @@ adminHubBtn?.addEventListener('click', (e) => {
     }
     if (!CURRENT_ROLE_SEL) CURRENT_ROLE_SEL = roles[0];
 
-    // Fast lookup for current role
     const enabledSet = new Set(
       role_abilities.filter(x => x.role === CURRENT_ROLE_SEL).map(x => x.ability)
     );
 
-    // Layout: two columns (roles on the left, abilities on the right)
     const wrap = document.createElement('div');
     wrap.style.display = 'grid';
     wrap.style.gridTemplateColumns = '220px 1fr';
     wrap.style.gap = '14px';
 
-    // --- Roles column ---
     const rolesCol = document.createElement('div');
     rolesCol.style.display = 'grid';
     rolesCol.style.gridTemplateColumns = '1fr';
@@ -860,12 +841,11 @@ adminHubBtn?.addEventListener('click', (e) => {
       }
       btn.addEventListener('click', () => {
         CURRENT_ROLE_SEL = role;
-        renderPermissionsUI(); // re-render to show abilities for the selected role
+        renderPermissionsUI();
       });
       rolesCol.appendChild(btn);
     });
 
-    // --- Abilities column ---
     const abilCol = document.createElement('div');
     abilCol.style.display = 'grid';
     abilCol.style.gridTemplateColumns = '1fr';
@@ -897,7 +877,6 @@ adminHubBtn?.addEventListener('click', (e) => {
         const enabled = e.target.checked;
         e.target.disabled = true;
         try {
-          // POST to add, DELETE to remove (matches your routes)
           const method = enabled ? 'POST' : 'DELETE';
           const res = await authFetch(PERMS, {
             method,
@@ -907,10 +886,9 @@ adminHubBtn?.addEventListener('click', (e) => {
           if (!res.ok) {
             const t = await res.text().catch(()=> '');
             alert(`Update failed: ${t || res.status}`);
-            e.target.checked = !enabled; // revert
+            e.target.checked = !enabled;
             return;
           }
-          // Update local state
           if (enabled) {
             PERM_STATE.role_abilities.push({ role: CURRENT_ROLE_SEL, ability });
           } else {
@@ -921,7 +899,7 @@ adminHubBtn?.addEventListener('click', (e) => {
         } catch (err) {
           console.error('toggle ability error:', err);
           alert('Update failed (network).');
-          e.target.checked = !enabled; // revert
+          e.target.checked = !enabled;
         } finally {
           e.target.disabled = false;
         }
@@ -978,6 +956,5 @@ adminHubBtn?.addEventListener('click', (e) => {
     loadJobs();
   })();
 
-  /* Optional auto-refresh every 60 seconds */
   setInterval(loadJobs, 60000);
 });
