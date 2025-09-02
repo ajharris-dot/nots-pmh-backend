@@ -82,9 +82,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Fallback: admin/employment roles
   function can(abilityKey) {
     const role = CURRENT_USER?.role;
-    if (!role) return false;
-    if (role === 'admin') return true;
-    if (MY_PERMS.size) return MY_PERMS.has(abilityKey);
+    if (!(role === 'admin' || role === 'employment')) { alert('Access denied.'); return; }
+
 
     // fallback map if /api/permissions/mine isn’t available server-side yet
     const FALLBACK = {
