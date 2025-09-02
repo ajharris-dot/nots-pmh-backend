@@ -12,7 +12,6 @@ const authRoutes = require('./routes/authRoutes');
 const jobRoutes = require('./routes/jobRoutes');
 const usersRoutes = require('./routes/usersRoutes');
 const authMiddleware = require('./middleware/authMiddleware');
-const permissionsRoutes = require('./routes/permissionsRoutes');
 const candidatesRoutes = require('./routes/candidatesRoutes');
 
 const app = express();
@@ -125,9 +124,6 @@ app.use('/api/jobs', jobRoutes);
 
 /* ===== Users (Admin only) ===== */
 app.use('/api/users', authMiddleware, authorizeRoles('admin'), usersRoutes);
-
-/* ===== Permissions (Admin only) ===== */
-app.use('/api/permissions', authMiddleware, authorizeRoles('admin'), permissionsRoutes);
 
 /* ===== Candidates =====
    Protect with abilities so Admin Hub choices matter:

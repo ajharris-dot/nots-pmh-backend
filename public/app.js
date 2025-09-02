@@ -17,7 +17,6 @@ fetch('/healthz')
 const API = '/api/jobs';
 const AUTH = '/api/auth';
 const USERS = '/api/users';
-const PERMS = '/api/permissions';
 const PLACEHOLDER = './placeholder-v2.png?v=20250814';
 
 let ALL_JOBS = [];
@@ -27,13 +26,6 @@ let CURRENT_USER = null;
 // ---- View toggle state ----
 const VIEW_KEY = 'pmhViewMode';
 let VIEW_MODE = (localStorage.getItem(VIEW_KEY) || 'card');
-
-// ---- Ability state (populated from /api/permissions/mine if available) ----
-let MY_PERMS = new Set(); // strings like 'job_create', 'job_edit', etc.
-
-// ---- Admin Hub permission state (for the modal UI only) ----
-let PERM_STATE = { roles: [], permissions: [], role_permissions: [] };
-let CURRENT_ROLE_SEL = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   const jobGrid = document.getElementById('jobGrid');
@@ -164,20 +156,16 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch { /* ignore; server still enforces */ }
   }
 
-  /* ------- Ability checks (UI + client guard) ------- */
-  // ability keys: 'job_create','job_edit','job_delete','job_assign','job_unassign'
   function can(abilityKey) {
     const role = CURRENT_USER?.role;
     if (!role) return false;
-    if (role === 'admin') return true; // superuser
-    if (MY_PERMS.size) return MY_PERMS.has(abilityKey);
+    if (role === 'admin') return true;
 
-    // Legacy fallback (if /api/permissions/mine is unavailable):
-    const FALLBACK = {
-      employment: new Set(['job_assign','job_unassign']),
-      operations: new Set(['job_create','job_edit','job_delete'])
+    const MAP = {
+      operations: new Set(['job_create','job_edit','job_delete']),
+      employment: new Set(['job_assign','job_unassign']) // upload handled by role check below
     };
-    return FALLBACK[role]?.has(abilityKey) || false;
+    return MAP[role]?.has(abilityKey) || false;
   }
 
   function openLoginModal(){

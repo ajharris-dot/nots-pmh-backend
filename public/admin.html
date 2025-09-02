@@ -1,85 +1,53 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Admin Hub — Roles & Permissions</title>
-  <link rel="stylesheet" href="styles.css"/>
+  <meta charset="utf-8" />
+  <title>Admin Hub</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <header class="topbar">
+  <div class="topbar">
     <div class="topbar-left">
-      <button id="backToHubBtn" class="secondary">← Positions</button>
-      <button id="employmentPageBtn" class="secondary">Employment</button>
-      <button id="adminHubBtn" class="primary">Admin Hub</button>
+      <button id="backBtn" class="secondary">← Back</button>
+      <h1>Admin Hub</h1>
     </div>
-    <h1>Admin Hub</h1>
+    <div class="topbar-logo"></div>
     <div class="topbar-actions">
       <button id="logoutBtn" class="secondary">Log out</button>
     </div>
-  </header>
+  </div>
 
-  <main class="content">
-    <div class="toolbar">
-      <div class="muted">Manage roles & permissions</div>
-    </div>
-
-    <!-- Users card (unchanged list + edit/delete that you liked) -->
-    <section class="section-card">
+  <div class="content">
+    <div class="section-card">
       <h3>Users</h3>
-      <form id="userForm" style="display:grid; grid-template-columns:repeat(5,1fr); gap:8px; align-items:end;">
-        <input type="hidden" id="userId"/>
-        <label>Email
-          <input id="userEmail" type="email" required/>
-        </label>
-        <label>Name
-          <input id="userName" type="text" />
-        </label>
-        <label>Role
-          <select id="userRole">
-            <option value="admin">admin</option>
-            <option value="operations">operations</option>
-            <option value="employment">employment</option>
-            <option value="manager">manager</option>
-            <option value="user">user</option>
-          </select>
-        </label>
-        <label>Password
-          <input id="userPassword" type="password" placeholder="••••••"/>
-        </label>
-        <div style="display:flex; gap:8px;">
-          <button class="primary" type="submit">Save</button>
-          <button id="resetUserForm" class="secondary" type="button">Reset</button>
+
+      <form id="userForm" class="modal-card" style="padding:12px; margin-bottom:12px;">
+        <input type="hidden" id="userId" />
+        <label>Email</label>
+        <input id="userEmail" type="email" required />
+        <label>Name</label>
+        <input id="userName" type="text" />
+        <label>Role</label>
+        <select id="userRole">
+          <option value="admin">admin</option>
+          <option value="operations">operations</option>
+          <option value="employment">employment</option>
+          <option value="manager">manager</option>
+          <option value="user">user</option>
+        </select>
+        <label>Password (leave blank to keep)</label>
+        <input id="userPassword" type="password" />
+        <div class="modal-actions">
+          <button type="button" id="resetUserForm" class="secondary">Reset</button>
+          <button type="submit" class="primary">Save</button>
         </div>
       </form>
 
-      <div id="usersList" style="margin-top:10px;"></div>
-    </section>
+      <div id="usersList" style="border:1px solid var(--line); border-radius:8px; padding:8px; background:#fff; max-height:60vh; overflow:auto;"></div>
+    </div>
+  </div>
 
-    <!-- NEW: Roles & Permissions editor (no table) -->
-    <section class="section-card">
-      <h3>Roles & Permissions</h3>
-
-      <div class="admin-layout">
-        <aside class="roles-list" id="rolesList">
-          <!-- role buttons injected here -->
-        </aside>
-
-        <section class="perm-editor">
-          <div class="perm-header">
-            <h4 id="permRoleTitle" class="muted">Select a role →</h4>
-            <div id="permHint" class="muted" style="font-size:12px;">
-              Toggle permissions. Changes save instantly.
-            </div>
-          </div>
-          <div id="permPool" class="perm-pool">
-            <!-- checkboxes injected here -->
-          </div>
-        </section>
-      </div>
-    </section>
-  </main>
-
-  <script src="admin.js"></script>
+  <script src="/admin.js" defer></script>
 </body>
 </html>
