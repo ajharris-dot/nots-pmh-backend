@@ -405,17 +405,65 @@ router.post(
  * Roles: admin, operations
  */
 router.post(
-  '/:id/unassign',
+  '/:id/assign',
   authMiddleware,
-  authorizeRoles('admin', 'operations'),
+  authorizeRoles('admin'),
   async (req, res) => {
     try {
+      const jobId = req.params.id;
+      const { candidate_id, employee } = req.body || {};
+
+      if (!jobId) return res.status(400).json({ error: 'job id is required' });
+      if (!candidate_id && !employee) {
+        return res.status(400).json({ error: 'candidate_id or employee is required' });
+      }
+
+      // 1) Resolve candidate
+      let candRow;
+      if (candidate_id) {
+        const q = `
+          SELECT id, full_name, status
+          FROM candidates
+          WHERE id = $1
+          LIMIT 1
+        `;
+        const r = await db.query(q, [candidate_id]);
+        candRow = r.rows[0];
+        if (!candRow) return res.status(400).json({ error: 'candidate not found' });
+      } else {
+        // Fallback by name if older UI still sends { employee }
+        const q = `
+          SELECT id, full_name, status
+          FROM candidates
+          WHERE LOWER(full_name) = LOWER($1)
+          LIMIT 1
+        `;
+        const r = await db.query(q, [employee]);
+        candRow = r.rows[0];
+        if (!candRow) return res.status(400).json({ error: 'candidate not found by name' });
+      }
+
+      // 2) Must be hired
+      if (String(candRow.status || '').toLowerCase() !== 'hired') {
+        return res.status(400).json({ error: 'candidate must be hired before assignment' });
+      }
+
+      // 3) Must NOT already be assigned to another job
+      const checkAssigned = await db.query(
+        `SELECT id FROM jobs WHERE LOWER(assigned_to) = LOWER($1) LIMIT 1`,
+        [candRow.full_name]
+      );
+      if (checkAssigned.rowCount) {
+        return res.status(409).json({ error: 'candidate is already filling a position' });
+      }
+
+      // 4) Update the job
       const { rows } = await db.query(
         `UPDATE jobs
-           SET assigned_to = NULL,
-               status      = 'Open',
-               filled_date = NULL
-         WHERE id = $1
+           SET assigned_to = $1,
+               status = 'Filled',
+               filled_date = COALESCE(filled_date, CURRENT_DATE)
+         WHERE id = $2
          RETURNING
            id,
            title,
@@ -427,16 +475,14 @@ router.post(
            filled_date,
            status,
            created_at`,
-        [req.params.id]
+        [candRow.full_name, jobId]
       );
 
-      if (!rows.length) return res.status(404).json({ error: 'Not found' });
+      if (!rows.length) return res.status(404).json({ error: 'job not found' });
       res.json(rows[0]);
     } catch (e) {
-      console.error('POST /api/jobs/:id/unassign failed:', e);
+      console.error('POST /api/jobs/:id/assign failed:', e);
       res.status(500).json({ error: 'DB error' });
     }
   }
 );
-
-module.exports = router;

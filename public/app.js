@@ -86,51 +86,50 @@ document.addEventListener('DOMContentLoaded', () => {
   // - only "hired"
   // - not already assigned to ANY job (based on ALL_JOBS employee names)
   async function loadCandidateOptions(){
-  if (!assignSelect) return;
-  assignSelect.innerHTML = `<option value="" disabled selected>Loading…</option>`;
+    if (!assignSelect) return;
+    assignSelect.innerHTML = `<option value="" disabled selected>Loading…</option>`;
 
-  try {
-    // Build a set of currently assigned names from the already-loaded jobs
-    const assignedNames = new Set(
-      ALL_JOBS
-        .filter(j => String(j.status || '').toLowerCase() === 'filled' && (j.employee || '').trim())
-        .map(j => (j.employee || '').trim().toLowerCase())
-    );
+    try {
+      // Build a set of currently assigned names from the already-loaded jobs
+      const assignedNames = new Set(
+        ALL_JOBS
+          .filter(j => String(j.status || '').toLowerCase() === 'filled' && (j.employee || '').trim())
+          .map(j => (j.employee || '').trim().toLowerCase())
+      );
 
-    const res = await authFetch('/api/candidates');
-    if (!res.ok) {
-      assignSelect.innerHTML = `<option value="" disabled selected>Failed to load candidates</option>`;
-      return;
+      const res = await authFetch('/api/candidates');
+      if (!res.ok) {
+        assignSelect.innerHTML = `<option value="" disabled selected>Failed to load candidates</option>`;
+        return;
+      }
+
+      const list = await res.json();
+      const arr = Array.isArray(list) ? list : [];
+      // eligible: Hired and not already assigned
+      const eligible = arr.filter(c =>
+        String(c.status || '').toLowerCase() === 'hired' &&
+        !assignedNames.has((c.full_name || '').trim().toLowerCase())
+      );
+
+      eligible.sort((a,b) => String(a.full_name||'').localeCompare(String(b.full_name||'')));
+
+      assignSelect.innerHTML = eligible.length
+        ? `<option value="" disabled selected>Select a candidate…</option>`
+        : `<option value="" disabled selected>No eligible candidates</option>`;
+
+      for (const c of eligible) {
+        const opt = document.createElement('option');
+        opt.value = c.id; // keep the id!
+        opt.textContent = c.full_name || '(Unnamed)';
+        opt.dataset.name = c.full_name || '';
+        opt.selected = false;
+        assignSelect.appendChild(opt);
+      }
+    } catch (err) {
+      console.error('loadCandidateOptions threw:', err);
+      assignSelect.innerHTML = `<option value="" disabled selected>Error loading candidates</option>`;
     }
-
-    const list = await res.json();
-    const arr = Array.isArray(list) ? list : [];
-    // eligible: Hired and not already assigned
-    const eligible = arr.filter(c =>
-      String(c.status || '').toLowerCase() === 'hired' &&
-      !assignedNames.has((c.full_name || '').trim().toLowerCase())
-    );
-
-    eligible.sort((a,b) => String(a.full_name||'').localeCompare(String(b.full_name||'')));
-
-    assignSelect.innerHTML = eligible.length
-      ? `<option value="" disabled selected>Select a candidate…</option>`
-      : `<option value="" disabled selected>No eligible candidates</option>`;
-
-    for (const c of eligible) {
-      const opt = document.createElement('option');
-      opt.value = c.id; // keep the id!
-      opt.textContent = c.full_name || '(Unnamed)';
-      opt.dataset.name = c.full_name || '';
-      opt.selected = false;
-      assignSelect.appendChild(opt);
-    }
-  } catch (err) {
-    console.error('loadCandidateOptions threw:', err);
-    assignSelect.innerHTML = `<option value="" disabled selected>Error loading candidates</option>`;
   }
-}
-
 
   /* ------- Auth helpers ------- */
   const getToken = () => localStorage.getItem(TOKEN_KEY) || '';
@@ -578,42 +577,66 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Assign modal
   assignForm?.addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  const ROLE = roleLower();
-  if (!isAuthed() || ROLE !== 'admin') { openLoginModal(); return; }
-  if (!ASSIGN_JOB_ID) return;
+    e.preventDefault();
+    const ROLE = roleLower();
+    if (!isAuthed() || ROLE !== 'admin') { openLoginModal(); return; }
+    if (!ASSIGN_JOB_ID) return;
 
-  const opt = assignSelect?.selectedOptions?.[0];
-  if (!opt || !opt.value) return;
+    const opt = assignSelect?.selectedOptions?.[0];
+    if (!opt || !opt.value) return;
 
-  const candidateId = Number(opt.value);
-  const employeeName = opt.dataset.name || opt.textContent || '';
+    const candidateId = Number(opt.value);
+    const employeeName = opt.dataset.name || opt.textContent || '';
 
-  const res = await authFetch(`/api/jobs/${ASSIGN_JOB_ID}/assign`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({ candidate_id: candidateId, employee: employeeName })
+    const res = await authFetch(`/api/jobs/${ASSIGN_JOB_ID}/assign`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ candidate_id: candidateId, employee: employeeName })
+    });
+
+    if (!res.ok) {
+      const t = await res.text().catch(()=> '');
+      // Optional: nicer messages based on server error codes
+      try {
+        const j = JSON.parse(t || '{}');
+        if (j.error === 'candidate_not_hired') return alert('Only Hired candidates can be assigned.');
+        if (j.error === 'candidate_already_assigned') return alert('That candidate is already assigned to a position.');
+        if (j.error === 'job_already_filled') return alert('This job is already filled.');
+        if (j.error === 'candidate_not_found') return alert('Candidate not found.');
+      } catch {}
+      alert(`Assign failed: ${t || res.status}`);
+      return;
+    }
+
+    closeAssignModal();
+    loadJobs();
   });
+  cancelAssign?.addEventListener('click', closeAssignModal);
 
-  if (!res.ok) {
-    const t = await res.text().catch(()=> '');
-    // Optional: nicer messages based on server error codes
-    try {
-      const j = JSON.parse(t || '{}');
-      if (j.error === 'candidate_not_hired') return alert('Only Hired candidates can be assigned.');
-      if (j.error === 'candidate_already_assigned') return alert('That candidate is already assigned to a position.');
-      if (j.error === 'job_already_filled') return alert('This job is already filled.');
-      if (j.error === 'candidate_not_found') return alert('Candidate not found.');
-    } catch {}
-    alert(`Assign failed: ${t || res.status}`);
-    return;
-  }
+  // Upload change -> patch job (admin-only)
+  const jobGridChange = async (e) => {
+    if (!e.target.classList.contains('photo-input')) return;
+    const ROLE = roleLower();
+    const canUpload = ROLE === 'admin';
+    if (!isAuthed() || !canUpload) { openLoginModal(); return; }
 
-  closeAssignModal();
-  loadJobs();
-});
+    const id = e.target.dataset.id;
+    const file = e.target.files?.[0];
+    if (!file) return;
 
+    const fd = new FormData();
+    fd.append('photo', file);
+    const up = await authFetch('/api/upload', { method: 'POST', body: fd });
+    if (!up.ok) { alert('Upload failed'); return; }
+    const { url } = await up.json();
 
+    await authFetch(`${API}/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employee_photo_url: url })
+    });
+    loadJobs();
+  };
   jobGrid?.addEventListener('change', jobGridChange);
 
   // Nav buttons
