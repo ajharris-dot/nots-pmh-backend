@@ -138,12 +138,12 @@ router.post(
 /**
  * PATCH /api/jobs/:id
  * General edits to a job
- * Roles: admin only (per your rule set)
+ * Roles: admin, operations
  */
 router.patch(
   '/:id',
   authMiddleware,
-  authorizeRoles('admin'),
+  authorizeRoles('admin', 'operations'),
   async (req, res) => {
     try {
       const {
@@ -162,7 +162,7 @@ router.patch(
         description: job_number,  // job_number -> description
         client: department,       // department -> client
         due_date,
-        filled_date,              // user-controlled
+        filled_date,
         assigned_to: employee,    // employee -> assigned_to
         status,
         employee_photo_url,
@@ -208,12 +208,12 @@ router.patch(
 
 /**
  * DELETE /api/jobs/:id
- * Roles: admin only
+ * Roles: admin, operations
  */
 router.delete(
   '/:id',
   authMiddleware,
-  authorizeRoles('admin'),
+  authorizeRoles('admin', 'operations'),
   async (req, res) => {
     try {
       const { rowCount } = await db.query('DELETE FROM jobs WHERE id = $1', [req.params.id]);
@@ -228,40 +228,76 @@ router.delete(
 
 /**
  * POST /api/jobs/:id/assign
- * Body: { employee }
- * Roles: admin, employment
+ * Body: { candidate_id }
+ * Roles: admin only
+ * Rules:
+ *   - candidate must exist
+ *   - candidate.status = 'hired'
+ *   - candidate.full_name must not already be assigned to another job
  */
 router.post(
   '/:id/assign',
   authMiddleware,
-  authorizeRoles('admin', 'employment'),
+  authorizeRoles('admin'),
   async (req, res) => {
     try {
-      const { employee } = req.body || {};
-      if (!employee) return res.status(400).json({ error: 'employee required' });
+      const jobId = Number(req.params.id);
+      const candidateId = Number(req.body?.candidate_id);
 
-      const { rows } = await db.query(
+      if (!jobId || !candidateId) {
+        return res.status(400).json({ error: 'job id and candidate_id are required' });
+      }
+
+      // 1) fetch candidate & validate hired
+      const candQ = await db.query(
+        `SELECT id, full_name, status
+           FROM candidates
+          WHERE id = $1`,
+        [candidateId]
+      );
+      if (!candQ.rowCount) return res.status(404).json({ error: 'candidate not found' });
+
+      const cand = candQ.rows[0];
+      if ((cand.status || '').toLowerCase() !== 'hired') {
+        return res.status(400).json({ error: 'candidate must be hired to assign' });
+      }
+
+      // 2) ensure candidate not already assigned to another job
+      const dupQ = await db.query(
+        `SELECT id
+           FROM jobs
+          WHERE TRIM(COALESCE(assigned_to,'')) ILIKE TRIM($1)
+            AND id <> $2
+          LIMIT 1`,
+        [cand.full_name, jobId]
+      );
+      if (dupQ.rowCount) {
+        return res.status(409).json({ error: 'candidate is already assigned to another position' });
+      }
+
+      // 3) assign -> set assigned_to, set status to 'Filled' and filled_date if needed
+      const upd = await db.query(
         `UPDATE jobs
-           SET assigned_to = $1,
-               status = 'Filled',
-               filled_date = COALESCE(filled_date, CURRENT_DATE)
-         WHERE id = $2
-         RETURNING
-           id,
-           title,
-           description AS job_number,
-           client      AS department,
-           assigned_to AS employee,
-           employee_photo_url,
-           due_date,
-           filled_date,
-           status,
-           created_at`,
-        [employee, req.params.id]
+            SET assigned_to = $1,
+                status      = 'Filled',
+                filled_date = COALESCE(filled_date, CURRENT_DATE)
+          WHERE id = $2
+          RETURNING
+            id,
+            title,
+            description AS job_number,
+            client      AS department,
+            assigned_to AS employee,
+            employee_photo_url,
+            due_date,
+            filled_date,
+            status,
+            created_at`,
+        [cand.full_name, jobId]
       );
 
-      if (!rows.length) return res.status(404).json({ error: 'Not found' });
-      res.json(rows[0]);
+      if (!upd.rowCount) return res.status(404).json({ error: 'Not found' });
+      return res.json(upd.rows[0]);
     } catch (e) {
       console.error('POST /api/jobs/:id/assign failed:', e);
       res.status(500).json({ error: 'DB error' });
@@ -271,31 +307,31 @@ router.post(
 
 /**
  * POST /api/jobs/:id/unassign
- * Roles: admin, employment
+ * Roles: admin, operations, employment (they can clear it if needed)
  */
 router.post(
   '/:id/unassign',
   authMiddleware,
-  authorizeRoles('admin', 'employment'),
+  authorizeRoles('admin', 'operations', 'employment'),
   async (req, res) => {
     try {
       const { rows } = await db.query(
         `UPDATE jobs
-           SET assigned_to = NULL,
-               status      = 'Open',
-               filled_date = NULL
-         WHERE id = $1
-         RETURNING
-           id,
-           title,
-           description AS job_number,
-           client      AS department,
-           assigned_to AS employee,
-           employee_photo_url,
-           due_date,
-           filled_date,
-           status,
-           created_at`,
+            SET assigned_to = NULL,
+                status      = 'Open',
+                filled_date = NULL
+          WHERE id = $1
+          RETURNING
+            id,
+            title,
+            description AS job_number,
+            client      AS department,
+            assigned_to AS employee,
+            employee_photo_url,
+            due_date,
+            filled_date,
+            status,
+            created_at`,
         [req.params.id]
       );
 

@@ -82,7 +82,9 @@ document.addEventListener('DOMContentLoaded', () => {
     assignModal?.classList.add('hidden');
   }
 
-  // Candidate list for assign (admin/employment only server-side; operations can't assign anyway)
+  // Candidate list for assign:
+  // - only "hired"
+  // - not already assigned to ANY job (based on ALL_JOBS employee names)
   async function loadCandidateOptions(){
     if (!assignSelect) return;
     assignSelect.innerHTML = `<option value="" disabled selected>Loading…</option>`;
@@ -93,16 +95,27 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       const list = await res.json();
-      const filtered = Array.isArray(list) ? [...list] : [];
-      filtered.sort((a,b) => String(a.full_name||'').localeCompare(String(b.full_name||'')));
+
+      // Build a set of currently assigned names from jobs
+      const assignedNames = new Set(
+        (ALL_JOBS || [])
+          .map(j => (j.employee || '').trim())
+          .filter(Boolean)
+      );
+
+      // Filter: hired & not already assigned
+      const filtered = (Array.isArray(list) ? list : [])
+        .filter(c => (c.status || '').toLowerCase() === 'hired')
+        .filter(c => !assignedNames.has((c.full_name || '').trim()))
+        .sort((a,b) => String(a.full_name||'').localeCompare(String(b.full_name||'')));
 
       assignSelect.innerHTML = filtered.length
-        ? `<option value="" disabled selected>Select a candidate…</option>`
-        : `<option value="" disabled selected>No candidates found</option>`;
+        ? `<option value="" disabled selected>Select a hired candidate…</option>`
+        : `<option value="" disabled selected>No eligible candidates</option>`;
 
       for (const c of filtered) {
         const opt = document.createElement('option');
-        opt.value = c.id;
+        opt.value = c.id; // <-- candidate_id
         opt.textContent = c.full_name || '(Unnamed)';
         opt.dataset.name = c.full_name || '';
         opt.selected = false;
@@ -568,12 +581,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const opt = assignSelect?.selectedOptions?.[0];
     if (!opt || !opt.value) return;
 
-    const employeeName = opt.dataset.name || opt.textContent || '';
+    const candidateId = Number(opt.value);
 
     await authFetch(`/api/jobs/${ASSIGN_JOB_ID}/assign`, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ employee: employeeName })
+      body:JSON.stringify({ candidate_id: candidateId })
     });
 
     closeAssignModal();
