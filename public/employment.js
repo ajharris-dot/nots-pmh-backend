@@ -3,7 +3,6 @@
 const TOKEN_KEY = 'authToken';
 if (!localStorage.getItem(TOKEN_KEY)) {
   window.location.replace('/login.html');
-  // stop executing the rest of this file on the protected page
   throw new Error('redirecting-to-login');
 }
 
@@ -12,9 +11,8 @@ const API  = '/api/candidates';
 const PLACEHOLDER = './placeholder-v2.png?v=20250814';
 
 const VIEW_KEY = 'employmentViewMode';
-let VIEW_MODE = localStorage.getItem(VIEW_KEY) || 'list'; // 'card' | 'list'
+let VIEW_MODE = localStorage.getItem(VIEW_KEY) || 'list';
 
-// auth helpers
 const getToken   = () => localStorage.getItem(TOKEN_KEY) || '';
 const setToken   = (t) => localStorage.setItem(TOKEN_KEY, t);
 const clearToken = () => localStorage.removeItem(TOKEN_KEY);
@@ -28,7 +26,6 @@ const authFetch  = (url, opts = {}) => {
 
 let CURRENT_USER = null;
 let ALL = [];
-let MY_PERMS = new Set(); // ability keys like 'candidate_create', 'candidate_edit', etc.
 
 document.addEventListener('DOMContentLoaded', () => {
   const backBtn   = document.getElementById('backToHubBtn');
@@ -36,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const grid      = document.getElementById('candidatesGrid');
   const search    = document.getElementById('search');
 
-  // Optional auth UI (safe if absent)
+  // Optional auth UI
   const loginBtn    = document.getElementById('loginBtn');
   const logoutBtn   = document.getElementById('logoutBtn');
   const loginModal  = document.getElementById('loginModal');
@@ -77,39 +74,31 @@ document.addEventListener('DOMContentLoaded', () => {
     did_not_start:          'Did not start'
   };
 
-  /* ---------- Ability checks ---------- */
-  // Preferred: use MY_PERMS from /api/permissions/mine
-  // Fallback: admin/employment roles
-  function can(abilityKey) {
-    const role = CURRENT_USER?.role;
-    if (!(role === 'admin' || role === 'employment')) { alert('Access denied.'); return; }
+  /* ---------- Helpers ---------- */
+  const roleLower = () => (CURRENT_USER?.role || '').toString().trim().toLowerCase();
 
-
-    // fallback map if /api/permissions/mine isn’t available server-side yet
-    const FALLBACK = {
-      employment: new Set(['candidate_create','candidate_edit','candidate_delete','candidate_advance','candidate_revert']),
-      // operations/users see nothing here by default for candidates
-    };
-    return FALLBACK[role]?.has(abilityKey) || false;
-  }
-
-  async function fetchMyPermissions() {
-    MY_PERMS = new Set();
-    if (!isAuthed()) return;
-    try {
-      const r = await authFetch('/api/permissions/mine');
-      if (r.ok) {
-        const j = await r.json();
-        const list = Array.isArray(j?.permissions) ? j.permissions : [];
-        list.forEach(p => MY_PERMS.add(String(p)));
-      }
-    } catch { /* ignore, server will still enforce */ }
+  // Admin & Employment can manage candidates; Operations cannot
+  function canCand(action) {
+    const r = roleLower();
+    if (!r) return false;
+    if (r === 'admin') return true;
+    if (r === 'employment') {
+      return new Set([
+        'candidate_view',
+        'candidate_create',
+        'candidate_edit',
+        'candidate_delete',
+        'candidate_advance',
+        'candidate_revert'
+      ]).has(action);
+    }
+    return false; // operations have no access here
   }
 
   /* ---------- Nav ---------- */
   backBtn?.addEventListener('click', () => (window.location.href = '/'));
 
-  /* ---------- View toggle helpers ---------- */
+  /* ---------- View toggle ---------- */
   function syncViewToggle() {
     if (VIEW_MODE === 'list') {
       candCardViewBtn?.classList.remove('active');
@@ -133,24 +122,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /* ---------- Auth helpers ---------- */
-  function updateAuthUI() {
-    if (isAuthed()) {
-      loginBtn?.setAttribute('style','display:none');
-      logoutBtn?.setAttribute('style','');
-    } else {
-      loginBtn?.setAttribute('style','');
-      logoutBtn?.setAttribute('style','display:none');
-    }
-
-    // show/hide Add Candidate by ability
-    if (isAuthed() && can('candidate_create')) {
-      addBtn?.setAttribute('style','');
-      addBtn?.removeAttribute('disabled');
-    } else {
-      addBtn?.setAttribute('style','display:none');
-      addBtn?.setAttribute('disabled','disabled');
-    }
-  }
   function openLoginModal() {
     loginForm?.reset();
     loginModal?.classList.remove('hidden');
@@ -159,10 +130,38 @@ document.addEventListener('DOMContentLoaded', () => {
   function closeLoginModal() {
     loginModal?.classList.add('hidden');
   }
+  async function fetchMe() {
+    if (!isAuthed()) { CURRENT_USER = null; return; }
+    try {
+      const r = await authFetch(`${AUTH}/me`);
+      if (r.ok) {
+        const d = await r.json();
+        CURRENT_USER = d?.authenticated ? d.user : null;
+      } else {
+        CURRENT_USER = null;
+      }
+    } catch {
+      CURRENT_USER = null;
+    }
+  }
+  function updateAuthUI() {
+    if (isAuthed()) {
+      loginBtn?.setAttribute('style','display:none');
+      logoutBtn?.setAttribute('style','');
+    } else {
+      loginBtn?.setAttribute('style','');
+      logoutBtn?.setAttribute('style','display:none');
+    }
+    // Show "Add Candidate" for admin + employment
+    if (canCand('candidate_create')) {
+      addBtn?.setAttribute('style','');
+    } else {
+      addBtn?.setAttribute('style','display:none');
+    }
+  }
 
   loginBtn?.addEventListener('click', openLoginModal);
   cancelLogin?.addEventListener('click', closeLoginModal);
-
   loginForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = document.getElementById('loginEmail')?.value?.trim();
@@ -183,7 +182,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (data?.token) {
         setToken(data.token);
         await fetchMe();
-        await fetchMyPermissions();
         updateAuthUI();
         closeLoginModal();
         await load();
@@ -195,18 +193,16 @@ document.addEventListener('DOMContentLoaded', () => {
       alert('Login failed (network).');
     }
   });
-
   logoutBtn?.addEventListener('click', () => {
     clearToken();
     CURRENT_USER = null;
-    MY_PERMS = new Set();
     window.location.replace('/login.html');
   });
 
   /* ---------- Candidate modal ---------- */
   addBtn?.addEventListener('click', () => {
     if (!isAuthed()) { openLoginModal(); return; }
-    if (!can('candidate_create')) { alert('Access denied.'); return; }
+    if (!canCand('candidate_create')) { alert('Access denied.'); return; }
     openModal();
   });
   cancelBtn?.addEventListener('click', closeModal);
@@ -220,11 +216,11 @@ document.addEventListener('DOMContentLoaded', () => {
   form?.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!isAuthed()) { openLoginModal(); return; }
-
     const id = idEl.value;
-    const needsCreate = !id && can('candidate_create');
-    const needsEdit   =  id && can('candidate_edit');
-    if (!needsCreate && !needsEdit) { alert('Access denied.'); return; }
+    const creating = !id;
+
+    if (creating && !canCand('candidate_create')) { alert('Access denied.'); return; }
+    if (!creating && !canCand('candidate_edit'))  { alert('Access denied.'); return; }
 
     const full_name = nameEl.value?.trim();
     if (!full_name) { alert('Name is required.'); nameEl.focus(); return; }
@@ -254,7 +250,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       if (!res.ok) {
         if (res.status === 401 || res.status === 403) {
-          alert('Please log in with the right access.');
+          alert('Please log in with Employment/Admin access.');
           openLoginModal();
           return;
         }
@@ -281,14 +277,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!action) return;
 
     if (action === 'edit') {
-      if (!isAuthed() || !can('candidate_edit')) { openLoginModal(); return; }
+      if (!canCand('candidate_edit')) { alert('Access denied.'); return; }
       const c = ALL.find(x => String(x.id) === String(id));
       openModal(c);
       return;
     }
 
+    if (!isAuthed()) { openLoginModal(); return; }
     if (action === 'delete') {
-      if (!isAuthed() || !can('candidate_delete')) { openLoginModal(); return; }
+      if (!canCand('candidate_delete')) { alert('Access denied.'); return; }
       if (!confirm('Delete candidate?')) return;
       const res = await authFetch(`${API}/${id}`, { method: 'DELETE' });
       if (!res.ok) {
@@ -301,11 +298,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (action === 'advance' || action === 'revert') {
-      if (!isAuthed()) { openLoginModal(); return; }
-      const needsAdvance = action === 'advance' && can('candidate_advance');
-      const needsRevert  = action === 'revert'  && can('candidate_revert');
-      if (!needsAdvance && !needsRevert) { alert('Access denied.'); return; }
-
+      if (!(canCand('candidate_advance') && canCand('candidate_revert'))) {
+        alert('Access denied.');
+        return;
+      }
       const c = ALL.find(x => String(x.id) === String(id));
       if (!c) return;
       let idx = STATUS_ORDER.indexOf(c.status);
@@ -331,26 +327,10 @@ document.addEventListener('DOMContentLoaded', () => {
   /* ---------- init ---------- */
   (async () => {
     await fetchMe();
-    await fetchMyPermissions();
     updateAuthUI();
     syncViewToggle();
     await load();
   })();
-
-  async function fetchMe() {
-    if (!isAuthed()) { CURRENT_USER = null; return; }
-    try {
-      const r = await authFetch(`${AUTH}/me`);
-      if (r.ok) {
-        const d = await r.json();
-        CURRENT_USER = d?.authenticated ? d.user : null;
-      } else {
-        CURRENT_USER = null;
-      }
-    } catch {
-      CURRENT_USER = null;
-    }
-  }
 
   async function load() {
     try {
@@ -372,21 +352,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function buildActionsHtml(c) {
-    const parts = [];
-    if (can('candidate_revert'))  parts.push(`<button class="secondary" data-action="revert"  data-id="${c.id}">◀︎ Step Back</button>`);
-    if (can('candidate_advance')) parts.push(`<button class="secondary" data-action="advance" data-id="${c.id}">Step Forward ▶︎</button>`);
-    if (can('candidate_edit'))    parts.push(`<button class="secondary" data-action="edit"    data-id="${c.id}">Edit</button>`);
-    if (can('candidate_delete'))  parts.push(`<button class="danger"    data-action="delete"  data-id="${c.id}">Delete</button>`);
-    if (!parts.length) return ''; // nothing the user can do
-    return parts.join('\n');
-  }
-
   function render() {
     const q = (search?.value || '').toLowerCase().trim();
     grid.innerHTML = '';
 
-    // Apply container classes for the chosen layout
     grid.classList.toggle('card-grid', VIEW_MODE === 'card');
     grid.classList.toggle('list-grid', VIEW_MODE === 'list');
 
@@ -401,12 +370,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     list.forEach(c => {
-      const actionsHtml = buildActionsHtml(c);
+      const actionsHtml = canCand('candidate_edit') || canCand('candidate_delete') || canCand('candidate_advance') || canCand('candidate_revert')
+        ? `
+          <button class="secondary" data-action="revert"  data-id="${c.id}">◀︎ Step Back</button>
+          <button class="secondary" data-action="advance" data-id="${c.id}">Step Forward ▶︎</button>
+          <button class="secondary" data-action="edit"    data-id="${c.id}">Edit</button>
+          <button class="danger"    data-action="delete"  data-id="${c.id}">Delete</button>
+        ` : '';
 
       if (VIEW_MODE === 'list') {
-        // ---------- LIST ROW ----------
         const row = document.createElement('div');
-        row.className = 'job-row'; // reuse list row styling
+        row.className = 'job-row';
         row.innerHTML = `
           <div class="thumb">
             <img src="${PLACEHOLDER}" alt="Candidate" />
@@ -426,14 +400,13 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
 
           <div class="actions">
-            ${actionsHtml || '<span class="muted">No actions available</span>'}
+            ${actionsHtml}
           </div>
         `;
         grid.appendChild(row);
       } else {
-        // ---------- CARD ----------
         const card = document.createElement('div');
-        card.className = 'job-card'; // reuse card style
+        card.className = 'job-card';
         card.innerHTML = `
           <div class="photo-container">
             <img src="${PLACEHOLDER}" alt="Candidate" />
@@ -455,7 +428,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
 
           <div class="card-actions">
-            ${actionsHtml || '<span class="muted" style="padding:6px 0;">No actions available</span>'}
+            ${actionsHtml}
           </div>
         `;
         grid.appendChild(card);

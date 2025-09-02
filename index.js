@@ -64,43 +64,46 @@ function authorizeRoles(...roles) {
 app.use('/api/auth', authRoutes);
 
 /* ===== Jobs =====
-   All Job routes require auth.
-   Writes are role-gated (no DB abilities).
+   All GETs require auth (so the app is private).
+   Role gates:
+   - admin, operations: create/edit/delete/unassign
+   - admin: assign
 */
-app.use('/api/jobs', authMiddleware);
+app.use('/api/jobs', authMiddleware); // auth for all job routes (GET/POST/etc.)
 
-// Create job: admin + operations
+// Create
 app.post('/api/jobs',
   authorizeRoles('admin', 'operations'),
   (req, _res, next) => next()
 );
 
-// Edit job: admin + operations
+// Edit
 app.patch('/api/jobs/:id',
   authorizeRoles('admin', 'operations'),
   (req, _res, next) => next()
 );
 
-// Delete job: admin + operations
+// Delete  <-- this is the one blocking you right now; give ops access here
 app.delete('/api/jobs/:id',
   authorizeRoles('admin', 'operations'),
   (req, _res, next) => next()
 );
 
-// Assign: admin only
+// Assign (admin only)
 app.post('/api/jobs/:id/assign',
   authorizeRoles('admin'),
   (req, _res, next) => next()
 );
 
-// Unassign: admin + operations
+// Unassign (admin + operations)
 app.post('/api/jobs/:id/unassign',
   authorizeRoles('admin', 'operations'),
   (req, _res, next) => next()
 );
 
-// Mount job handlers after gates
+// Finally mount jobs router
 app.use('/api/jobs', jobRoutes);
+
 
 /* ===== Users (Admin only) ===== */
 app.use('/api/users', authMiddleware, authorizeRoles('admin'), usersRoutes);
