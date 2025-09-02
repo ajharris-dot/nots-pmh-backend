@@ -1,3 +1,4 @@
+// public/app.js
 console.log('app.js boot');
 
 // --- early auth gate ---
@@ -59,7 +60,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Users sub-section
   const userForm = document.getElementById('userForm');
-  const resetUserFormBtn = document.getElementById('resetUserForm');
   const usersList = document.getElementById('usersList');
   const userIdEl = document.getElementById('userId');
   const userEmailEl = document.getElementById('userEmail');
@@ -150,8 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Try to load the current user's permissions (ability keys).
-  // If the endpoint doesn't exist / not allowed, we just fall back to role heuristics.
+  // Pull user ability keys so UI reflects Admin Hub changes
   async function fetchMyPermissions() {
     MY_PERMS = new Set();
     if (!isAuthed()) return;
@@ -161,12 +160,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const j = await r.json();
         const list = Array.isArray(j?.permissions) ? j.permissions : [];
         list.forEach(p => MY_PERMS.add(String(p)));
-      } else {
-        // silently ignore; backend will still enforce
       }
-    } catch (e) {
-      // ignore; backend will still enforce
-    }
+    } catch { /* ignore; server still enforces */ }
   }
 
   /* ------- Ability checks (UI + client guard) ------- */
@@ -179,7 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Legacy fallback (if /api/permissions/mine is unavailable):
     const FALLBACK = {
-      employment: new Set(['job_assign','job_unassign']),  // and upload handled separately
+      employment: new Set(['job_assign','job_unassign']),
       operations: new Set(['job_create','job_edit','job_delete'])
     };
     return FALLBACK[role]?.has(abilityKey) || false;
@@ -293,7 +288,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (String(CURRENT_FILTER || 'all').toLowerCase() !== 'all') {
         params.set('status', String(CURRENT_FILTER).toLowerCase());
       }
-      const res = await authFetch(`${API}?${params.toString()}`); // <-- authFetch
+      const res = await authFetch(`${API}?${params.toString()}`);
       if (!res.ok) {
         const msg = await res.text().catch(()=> '');
         console.error('Failed to fetch jobs:', res.status, msg);
@@ -332,7 +327,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const canAssign = can('job_assign');
     const canEdit   = can('job_edit');
     const canDelete = can('job_delete');
-    // Upload photo still gated by role server-side; keep same UI rule as before:
+    // Upload photo still gated by role server-side; keep same UI rule:
     const canUpload = (CURRENT_USER?.role === 'admin' || CURRENT_USER?.role === 'employment') && isFilled(job);
 
     const inputId = `file_${job.id}`;
@@ -553,6 +548,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (action === 'open-login') { openLoginModal(); return; }
 
     if (action === 'trigger-upload') {
+      // upload still role-guarded on server; keep legacy client check
       const role = CURRENT_USER?.role;
       if (!isAuthed() || !(role === 'admin' || role === 'employment')) { openLoginModal(); return; }
       const input = document.getElementById(e.target.dataset.input);
@@ -774,7 +770,7 @@ document.addEventListener('DOMContentLoaded', () => {
         alert(`Save failed: ${t || res.status}`);
         return;
       }
-      resetUserForm();
+      userForm?.reset(); if (userIdEl) userIdEl.value = '';
       loadUsers();
     } catch (err) {
       console.error('save user error:', err);
@@ -924,7 +920,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
 
-      const labelText = document.createElement('span');
+      const labelText = document.createElement('span'); // <-- fixed: added const
       labelText.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, monospace';
       labelText.textContent = permission;
 
@@ -938,8 +934,6 @@ document.addEventListener('DOMContentLoaded', () => {
     permissionsList.innerHTML = '';
     permissionsList.appendChild(wrap);
   }
-
-  function cap(s){ return String(s || '').replace(/^\w/, c => c.toUpperCase()); }
 
   // Upload change -> patch job (guarded)
   const jobGridChange = async (e) => {
