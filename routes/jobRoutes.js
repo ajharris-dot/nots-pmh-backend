@@ -310,17 +310,74 @@ router.post(
  * Roles: admin, operations, employment (they can clear it if needed)
  */
 router.post(
-  '/:id/unassign',
+  '/:id/assign',
   authMiddleware,
-  authorizeRoles('admin', 'operations', 'employment'),
+  authorizeRoles('admin'),
   async (req, res) => {
     try {
-      const { rows } = await db.query(
+      const jobId = req.params.id;
+      const { candidate_id, employee } = req.body || {};
+
+      // 1) Job must exist and not already be filled
+      const jobQ = await db.query(
+        `SELECT id, assigned_to, status, filled_date FROM jobs WHERE id = $1`,
+        [jobId]
+      );
+      if (!jobQ.rows.length) return res.status(404).json({ error: 'job_not_found' });
+
+      const job = jobQ.rows[0];
+      if (String(job.status).toLowerCase() === 'filled' && job.assigned_to) {
+        return res.status(409).json({ error: 'job_already_filled' });
+      }
+
+      // 2) Resolve candidate
+      let cand;
+      if (candidate_id) {
+        const cq = await db.query(
+          `SELECT id, full_name, status
+             FROM candidates
+            WHERE id = $1`,
+          [candidate_id]
+        );
+        cand = cq.rows[0];
+      } else if (employee) {
+        const cq = await db.query(
+          `SELECT id, full_name, status
+             FROM candidates
+            WHERE LOWER(full_name) = LOWER($1)
+            LIMIT 1`,
+          [employee]
+        );
+        cand = cq.rows[0];
+      }
+
+      if (!cand) return res.status(400).json({ error: 'candidate_not_found' });
+
+      // 3) Must be hired
+      if (String(cand.status).toLowerCase() !== 'hired') {
+        return res.status(409).json({ error: 'candidate_not_hired' });
+      }
+
+      // 4) Candidate must not already be assigned elsewhere
+      const dupQ = await db.query(
+        `SELECT 1
+           FROM jobs
+          WHERE LOWER(assigned_to) = LOWER($1)
+            AND LOWER(status) = 'filled'
+          LIMIT 1`,
+        [cand.full_name]
+      );
+      if (dupQ.rowCount) {
+        return res.status(409).json({ error: 'candidate_already_assigned' });
+      }
+
+      // 5) Perform assignment
+      const upd = await db.query(
         `UPDATE jobs
-            SET assigned_to = NULL,
-                status      = 'Open',
-                filled_date = NULL
-          WHERE id = $1
+            SET assigned_to = $1,
+                status      = 'Filled',
+                filled_date = COALESCE(filled_date, CURRENT_DATE)
+          WHERE id = $2
           RETURNING
             id,
             title,
@@ -332,6 +389,44 @@ router.post(
             filled_date,
             status,
             created_at`,
+        [cand.full_name, jobId]
+      );
+
+      return res.json(upd.rows[0]);
+    } catch (e) {
+      console.error('POST /api/jobs/:id/assign failed:', e);
+      res.status(500).json({ error: 'DB error' });
+    }
+  }
+);
+
+/**
+ * POST /api/jobs/:id/unassign
+ * Roles: admin, operations
+ */
+router.post(
+  '/:id/unassign',
+  authMiddleware,
+  authorizeRoles('admin', 'operations'),
+  async (req, res) => {
+    try {
+      const { rows } = await db.query(
+        `UPDATE jobs
+           SET assigned_to = NULL,
+               status      = 'Open',
+               filled_date = NULL
+         WHERE id = $1
+         RETURNING
+           id,
+           title,
+           description AS job_number,
+           client      AS department,
+           assigned_to AS employee,
+           employee_photo_url,
+           due_date,
+           filled_date,
+           status,
+           created_at`,
         [req.params.id]
       );
 
