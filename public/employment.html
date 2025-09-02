@@ -31,6 +31,15 @@
     </div>
   </header>
 
+  <label for="candSort" class="muted" style="margin-right:8px;">Sort by:</label>
+  <select id="candSort">
+    <option value="name_asc">Name (A–Z)</option>
+    <option value="name_desc">Name (Z–A)</option>
+    <option value="status_asc">Hire process (Pending → Hired)</option>
+    <option value="status_desc">Hire process (Hired → Pending)</option>
+  </select>
+
+
   <main class="content">
     <div class="toolbar">
       <input id="search" placeholder="Search name / email / phone"/>

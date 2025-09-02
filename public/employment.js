@@ -32,6 +32,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const addBtn    = document.getElementById('addCandidateBtn');
   const grid      = document.getElementById('candidatesGrid');
   const search    = document.getElementById('search');
+  const sortSelect = document.getElementById('candSort');
+  const SORT_KEY = 'employmentSortMode';
+  let SORT_MODE = localStorage.getItem(SORT_KEY) || 'name_asc';
 
   // Optional auth UI
   const loginBtn    = document.getElementById('loginBtn');
@@ -77,7 +80,57 @@ document.addEventListener('DOMContentLoaded', () => {
   /* ---------- Helpers ---------- */
   const roleLower = () => (CURRENT_USER?.role || '').toString().trim().toLowerCase();
 
-  // Admin & Employment can manage candidates; Operations cannot
+  // NEW: helpers to map/compare for sort
+  function nameKey(c) {
+    return String(c?.full_name || '').trim().toLowerCase();
+  }
+  function statusIndex(s) {
+    const idx = STATUS_ORDER.indexOf(s);
+    return idx >= 0 ? idx : STATUS_ORDER.length + 1; // unknowns go to end
+  }
+  function applySort(list) {
+    const mode = SORT_MODE;
+    const arr = list.slice();
+
+    if (mode === 'name_asc' || mode === 'name_desc') {
+      arr.sort((a, b) => {
+        const A = nameKey(a);
+        const B = nameKey(b);
+        if (A < B) return mode === 'name_asc' ? -1 : 1;
+        if (A > B) return mode === 'name_asc' ? 1 : -1;
+        // tie-breaker by status order then id to keep stable
+        const s = statusIndex(a.status) - statusIndex(b.status);
+        return s !== 0 ? s : (String(a.id).localeCompare(String(b.id)));
+      });
+    } else if (mode === 'status_asc' || mode === 'status_desc') {
+      const mult = (mode === 'status_asc') ? 1 : -1; // pending→hired vs reverse
+      arr.sort((a, b) => {
+        const s = (statusIndex(a.status) - statusIndex(b.status)) * mult;
+        if (s !== 0) return s;
+        // tie-breaker by name then id
+        const A = nameKey(a), B = nameKey(b);
+        if (A < B) return -1;
+        if (A > B) return 1;
+        return String(a.id).localeCompare(String(b.id));
+      });
+    }
+    return arr;
+  }
+
+  // NEW: initialize + listen for sort changes
+  if (sortSelect) {
+    // reflect saved mode in the UI
+    try { sortSelect.value = SORT_MODE; } catch {}
+    sortSelect.addEventListener('change', () => {
+      SORT_MODE = sortSelect.value || 'name_asc';
+      localStorage.setItem(SORT_KEY, SORT_MODE);
+      render();
+    });
+  }
+
+ 
+
+ // Admin & Employment can manage candidates; Operations cannot
   function canCand(action) {
     const r = roleLower();
     if (!r) return false;
@@ -359,15 +412,22 @@ document.addEventListener('DOMContentLoaded', () => {
     grid.classList.toggle('card-grid', VIEW_MODE === 'card');
     grid.classList.toggle('list-grid', VIEW_MODE === 'list');
 
-    const list = ALL.filter(c => {
+    // existing filter:
+    let list = ALL.filter(c => {
       const t = `${c.full_name || ''} ${c.email || ''} ${c.phone || ''}`.toLowerCase();
       return !q || t.includes(q);
     });
+
+    // NEW: apply selected sort
+    list = applySort(list);
 
     if (!list.length) {
       grid.innerHTML = `<div style="color:#6b7280">No candidates yet.</div>`;
       return;
     }
+
+    // ... keep your existing list/card rendering below ...
+
 
     list.forEach(c => {
       const actionsHtml = canCand('candidate_edit') || canCand('candidate_delete') || canCand('candidate_advance') || canCand('candidate_revert')
