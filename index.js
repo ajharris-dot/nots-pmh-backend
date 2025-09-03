@@ -102,11 +102,11 @@ app.post('/api/jobs/:id/unassign',
 );
 
 // Finally mount jobs router
-app.use('/api/jobs', jobRoutes);
+app.use('/api/jobs', (jobRoutes.router || jobRoutes));
 
 
 /* ===== Users (Admin only) ===== */
-app.use('/api/users', authMiddleware, authorizeRoles('admin'), usersRoutes);
+app.use('/api/users', authMiddleware, authorizeRoles('admin'), (usersRoutes.router || usersRoutes));
 
 /* ===== Candidates =====
    Admin + Employment only (Operations excluded)
@@ -114,7 +114,7 @@ app.use('/api/users', authMiddleware, authorizeRoles('admin'), usersRoutes);
 app.use('/api/candidates',
   authMiddleware,
   authorizeRoles('admin', 'employment'),
-  candidatesRoutes
+  (candidatesRoutes.router || candidatesRoutes)
 );
 
 /* ===== Upload (Admin only on main page) =====
