@@ -239,7 +239,7 @@ router.delete(
 router.post(
   '/:id/assign',
   authMiddleware,
-  authorizeRoles('admin'),
+  authorizeRoles('admin', 'operations'),
   async (req, res) => {
     try {
       const jobId = req.params.id; // keep as string (UUID-safe)

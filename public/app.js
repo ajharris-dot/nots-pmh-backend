@@ -331,7 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const canEdit     = (ROLE === 'admin' || ROLE === 'operations');
     const canDelete   = (ROLE === 'admin' || ROLE === 'operations');
     // Assign = admin only
-    const canAssign   = (ROLE === 'admin');
+    const canAssign   = (ROLE === 'admin' || ROLE === 'operations');
     // Unassign = admin or operations
     const canUnassign = (ROLE === 'admin' || ROLE === 'operations');
 
@@ -487,7 +487,7 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
 
     const ROLE = roleLower();
-    if (!isAuthed()) { openLoginModal(); return; }
+    if (!isAuthed() || (ROLE !== 'admin' && ROLE !== 'operations')) { openLoginModal(); return; }
 
     // Read form values
     const id         = document.getElementById('jobId')?.value?.trim();

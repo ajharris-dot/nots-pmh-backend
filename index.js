@@ -105,13 +105,19 @@ app.use('/api/candidates',
 app.post(
   '/api/upload',
   authMiddleware,
-  authorizeRoles('admin'),
+  authorizeRoles('admin', 'operations'),
   upload.single('photo'),
   (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const url = `/uploads/${req.file.filename}`;
     res.json({ url });
   }
+);
+
+/* ===== Posting Candidates (Admin + Operations) ===== */
+app.post('/api/jobs/:id/assign',
+  authorizeRoles('admin', 'operations'),
+  (req, _res, next) => next()
 );
 
 /* ---------- Health + HTML ---------- */
