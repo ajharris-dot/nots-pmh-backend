@@ -105,7 +105,7 @@ app.use('/api/candidates',
 app.post(
   '/api/upload',
   authMiddleware,
-  authorizeRoles('admin', 'operations'),
+  authorizeRoles('admin'),
   upload.single('photo'),
   (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });

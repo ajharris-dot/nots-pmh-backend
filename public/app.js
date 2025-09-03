@@ -620,7 +620,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (action === 'open-login') { openLoginModal(); return; }
 
     if (action === 'trigger-upload') {
-      // Upload: admin only (UI + server)
+      // Upload: admin + operations only (UI + server)
       const ROLE = roleLower();
       if (!isAuthed() || (ROLE !== 'admin' && ROLE !== 'operations')) { openLoginModal(); return; }
       const input = document.getElementById(btn.dataset.input);
@@ -643,7 +643,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (action === 'assign') {
       // Assign: admin only
       const ROLE = roleLower();
-      if (!isAuthed() || ROLE !== 'admin') { openLoginModal(); return; }
+      if (!isAuthed() || (ROLE !== 'admin' && ROLE !== 'operations')) { openLoginModal(); return; }
       openAssignModal(id);
 
     } else if (action === 'unassign') {
@@ -658,7 +658,7 @@ document.addEventListener('DOMContentLoaded', () => {
   assignForm?.addEventListener('submit', async (e)=>{
     e.preventDefault();
     const ROLE = roleLower();
-    if (!isAuthed() || ROLE !== 'admin') { openLoginModal(); return; }
+    if (!isAuthed() || (ROLE !== 'admin' && ROLE !== 'operations')) { openLoginModal(); return; }
     if (!ASSIGN_JOB_ID) return;
 
     const opt = assignSelect?.selectedOptions?.[0];
