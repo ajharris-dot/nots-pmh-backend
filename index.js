@@ -14,6 +14,16 @@ const candidatesRoutes = require('./routes/candidatesRoutes');
 
 const app = express();
 
+/* ---------- Helper: unwrap router exports ---------- */
+function asMiddleware(mod, name = 'router') {
+  if (typeof mod === 'function') return mod;                         // module.exports = router
+  if (mod && typeof mod.router === 'function') return mod.router;    // module.exports = { router }
+  if (mod && typeof mod.default === 'function') return mod.default;  // module.exports = { default: router }
+  if (mod && mod.default && typeof mod.default.router === 'function') return mod.default.router;
+  console.error(`asMiddleware(): Could not unwrap ${name}. Got:`, mod);
+  throw new TypeError(`${name} must export an Express middleware/router function`);
+}
+
 /* ---------- Uploads setup ---------- */
 const UPLOAD_DIR = path.join(__dirname, 'public', 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -60,16 +70,16 @@ function authorizeRoles(...roles) {
 }
 
 /* ---------- Routes ---------- */
-// Auth
-app.use('/api/auth', authRoutes);
+// Auth (no auth middleware here)
+app.use('/api/auth', asMiddleware(authRoutes, 'authRoutes'));
 
 /* ===== Jobs =====
-   All GETs require auth (so the app is private).
+   All job routes require auth (private app).
    Role gates:
    - admin, operations: create/edit/delete/unassign
    - admin: assign
 */
-app.use('/api/jobs', authMiddleware); // auth for all job routes (GET/POST/etc.)
+app.use('/api/jobs', authMiddleware);
 
 // Create
 app.post('/api/jobs',
@@ -83,7 +93,7 @@ app.patch('/api/jobs/:id',
   (req, _res, next) => next()
 );
 
-// Delete  <-- this is the one blocking you right now; give ops access here
+// Delete
 app.delete('/api/jobs/:id',
   authorizeRoles('admin', 'operations'),
   (req, _res, next) => next()
@@ -102,11 +112,14 @@ app.post('/api/jobs/:id/unassign',
 );
 
 // Finally mount jobs router
-app.use('/api/jobs', (jobRoutes.router || jobRoutes));
-
+app.use('/api/jobs', asMiddleware(jobRoutes, 'jobRoutes'));
 
 /* ===== Users (Admin only) ===== */
-app.use('/api/users', authMiddleware, authorizeRoles('admin'), (usersRoutes.router || usersRoutes));
+app.use('/api/users',
+  authMiddleware,
+  authorizeRoles('admin'),
+  asMiddleware(usersRoutes, 'usersRoutes')
+);
 
 /* ===== Candidates =====
    Admin + Employment only (Operations excluded)
@@ -114,13 +127,10 @@ app.use('/api/users', authMiddleware, authorizeRoles('admin'), (usersRoutes.rout
 app.use('/api/candidates',
   authMiddleware,
   authorizeRoles('admin', 'employment'),
-  (candidatesRoutes.router || candidatesRoutes)
+  asMiddleware(candidatesRoutes, 'candidatesRoutes')
 );
 
-/* ===== Upload (Admin only on main page) =====
-   If you later want employment to upload, add 'employment' here too,
-   but your current spec is admin-only on the main page.
-*/
+/* ===== Upload (Admin only on main page) ===== */
 app.post(
   '/api/upload',
   authMiddleware,
