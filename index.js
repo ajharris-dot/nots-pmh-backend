@@ -16,9 +16,9 @@ const app = express();
 
 /* ---------- Helper: unwrap router exports ---------- */
 function asMiddleware(mod, name = 'router') {
-  if (typeof mod === 'function') return mod;                         // module.exports = router
-  if (mod && typeof mod.router === 'function') return mod.router;    // module.exports = { router }
-  if (mod && typeof mod.default === 'function') return mod.default;  // module.exports = { default: router }
+  if (typeof mod === 'function') return mod;
+  if (mod && typeof mod.router === 'function') return mod.router;
+  if (mod && typeof mod.default === 'function') return mod.default;
   if (mod && mod.default && typeof mod.default.router === 'function') return mod.default.router;
   console.error(`asMiddleware(): Could not unwrap ${name}. Got:`, mod);
   throw new TypeError(`${name} must export an Express middleware/router function`);
@@ -42,7 +42,7 @@ app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors({
   origin: true,
-  credentials: false, // JWT, not cookies
+  credentials: false,
   allowedHeaders: ['Content-Type', 'Authorization'],
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']
 }));
@@ -59,9 +59,9 @@ app.get('/admin.html', (_req, res) =>
 
 /* ---------- Helpers ---------- */
 function authorizeRoles(...roles) {
-  const normalized = roles.map(r => String(r).toLowerCase());
+  const normalized = roles.map(r => String(r).trim().toLowerCase());
   return (req, res, next) => {
-    const role = String(req.user?.role || '').toLowerCase();
+    const role = String(req.user?.role || '').trim().toLowerCase();
     if (!role || !normalized.includes(role)) {
       return res.status(403).json({ error: 'forbidden' });
     }
@@ -74,45 +74,18 @@ function authorizeRoles(...roles) {
 app.use('/api/auth', asMiddleware(authRoutes, 'authRoutes'));
 
 /* ===== Jobs =====
-   All job routes require auth (private app).
-   Role gates:
-   - admin, operations: create/edit/delete/unassign
-   - admin: assign
+   All job routes require auth; router handles role gates.
 */
-app.use('/api/jobs', authMiddleware);
-
-// Create
-app.post('/api/jobs',
-  authorizeRoles('admin', 'operations'),
-  (req, _res, next) => next()
+app.use(
+  '/api/jobs',
+  authMiddleware,
+  // tiny debug logger; safe to remove after verifying roles
+  (req, _res, next) => { 
+    console.log('[jobs]', { email: req.user?.email, role: req.user?.role });
+    next();
+  },
+  asMiddleware(jobRoutes, 'jobRoutes')
 );
-
-// Edit
-app.patch('/api/jobs/:id',
-  authorizeRoles('admin', 'operations'),
-  (req, _res, next) => next()
-);
-
-// Delete
-app.delete('/api/jobs/:id',
-  authorizeRoles('admin', 'operations'),
-  (req, _res, next) => next()
-);
-
-// Assign (admin only)
-app.post('/api/jobs/:id/assign',
-  authorizeRoles('admin'),
-  (req, _res, next) => next()
-);
-
-// Unassign (admin + operations)
-app.post('/api/jobs/:id/unassign',
-  authorizeRoles('admin', 'operations'),
-  (req, _res, next) => next()
-);
-
-// Finally mount jobs router
-app.use('/api/jobs', asMiddleware(jobRoutes, 'jobRoutes'));
 
 /* ===== Users (Admin only) ===== */
 app.use('/api/users',
@@ -121,9 +94,7 @@ app.use('/api/users',
   asMiddleware(usersRoutes, 'usersRoutes')
 );
 
-/* ===== Candidates =====
-   Admin + Employment only (Operations excluded)
-*/
+/* ===== Candidates (Admin + Employment) ===== */
 app.use('/api/candidates',
   authMiddleware,
   authorizeRoles('admin', 'employment'),

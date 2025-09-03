@@ -71,6 +71,19 @@ document.addEventListener('DOMContentLoaded', () => {
     return (CURRENT_USER?.role || '').toString().trim().toLowerCase();
   }
 
+  async function fetchMe() {
+    if (!isAuthed()) { CURRENT_USER = null; return; }
+    try {
+      const res = await authFetch(`${AUTH}/me`);
+      if (!res.ok) throw new Error('me failed');
+      const data = await res.json();
+      CURRENT_USER = data?.authenticated ? data.user : null;
+      console.log('[me]', { email: CURRENT_USER?.email, role: CURRENT_USER?.role });
+    } catch {
+      CURRENT_USER = null;
+    }
+  }
+
   function openAssignModal(jobId){
     ASSIGN_JOB_ID = jobId;
     assignForm?.reset();

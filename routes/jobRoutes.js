@@ -5,13 +5,13 @@ const db = require('../models/db');
 const authMiddleware = require('../middleware/authMiddleware');
 
 /* ---------- Helpers ---------- */
-// Gate by role (case-insensitive)
+// routes/jobRoutes.js
 function authorizeRoles(...roles) {
-  const allowed = roles.map(r => String(r).toLowerCase());
+  const allowed = roles.map(r => String(r).trim().toLowerCase());
   return (req, res, next) => {
-    const role = String(req.user?.role || '').toLowerCase();
+    const role = String(req.user?.role || '').trim().toLowerCase();
     if (!role || !allowed.includes(role)) {
-      return res.status(403).json({ error: 'forbidden' });
+      return res.status(403).json({ error: 'forbidden', who: req.user?.email || null, role });
     }
     next();
   };
