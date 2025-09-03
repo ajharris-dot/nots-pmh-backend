@@ -180,8 +180,7 @@ button:disabled{ opacity:0.55; cursor:not-allowed; }
 /* Floating CTA: "Hard Day?" */
 .floating-cta{
   position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
+  right: 18px;
   bottom: 18px;
   z-index: 1100;
   display: inline-flex;
@@ -189,8 +188,8 @@ button:disabled{ opacity:0.55; cursor:not-allowed; }
   justify-content: center;
   padding: 10px 14px;
   border-radius: 999px;
-  background: var(--accent);
-  color: #fff;
+  background: #e5e5e5;
+  color: #111;
   font-weight: 700;
   border: 1px solid rgba(255,255,255,.15);
   box-shadow: 0 6px 18px rgba(0,0,0,.18);
@@ -198,12 +197,12 @@ button:disabled{ opacity:0.55; cursor:not-allowed; }
   transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
 }
 .floating-cta:hover{
-  background: var(--accent-600);
-  transform: translateY(-1px);
+  background: #d4d4d4;
+  transform: none;
   box-shadow: 0 8px 22px rgba(0,0,0,.22);
 }
 .floating-cta:active{
-  transform: translateY(0);
+  background: #c4c4c4;
 }
 @media (prefers-reduced-motion: reduce){
   .floating-cta{ transition: none; }
