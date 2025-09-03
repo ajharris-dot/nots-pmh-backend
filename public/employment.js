@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Pretty sort controls
   const sortFieldEl = document.getElementById('sortField'); // 'name' | 'status'
   const sortDirEl   = document.getElementById('sortDir');   // 'asc' | 'desc'
+  const SORT_KEY    = 'employmentSortState';
 
   // auth UI
   const loginBtn    = document.getElementById('loginBtn');
@@ -112,31 +113,55 @@ document.addEventListener('DOMContentLoaded', () => {
     return idx >= 0 ? idx : STATUS_ORDER.length + 1;
   };
 
-  /* ---------- Sort state ---------- */
-  const SORT_KEY = 'employmentSortState';
-  function readSortState() {
-    let saved = null;
-    try { saved = JSON.parse(localStorage.getItem(SORT_KEY) || 'null'); } catch {}
-    const field = saved?.field || sortFieldEl?.value || 'name';
-    const dir   = saved?.dir   || sortDirEl?.value   || 'asc';
-    return { field, dir };
-  }
-  function writeSortState(state) {
-    localStorage.setItem(SORT_KEY, JSON.stringify(state));
-    if (sortFieldEl) sortFieldEl.value = state.field;
-    if (sortDirEl)   sortDirEl.value   = state.dir;
-  }
-  // initialize
-  writeSortState(readSortState());
+  /* ---------- Sort: state, listeners, sorter ---------- */
+  function getDefaultSortState() { return { field: 'name', dir: 'asc' }; }
 
-  // listeners
-  sortFieldEl?.addEventListener('change', () => { writeSortState(readSortState()); render(); });
-  sortDirEl  ?.addEventListener('change', () => { writeSortState(readSortState()); render(); });
+  function readSortState() {
+    // 1) Prefer DOM (if already set by user)
+    const f = sortFieldEl?.value;
+    const d = sortDirEl?.value;
+    if (f && d) return { field: f, dir: d };
+
+    // 2) Saved JSON
+    try {
+      const saved = JSON.parse(localStorage.getItem(SORT_KEY) || 'null');
+      if (saved && (saved.field === 'name' || saved.field === 'status') &&
+                  (saved.dir === 'asc'   || saved.dir === 'desc')) {
+        return saved;
+      }
+    } catch {}
+
+    // 3) Default
+    return getDefaultSortState();
+  }
+
+  function writeSortState(state) {
+    const field = (state.field === 'status') ? 'status' : 'name';
+    const dir   = (state.dir   === 'desc')   ? 'desc'   : 'asc';
+    const normalized = { field, dir };
+    if (sortFieldEl) sortFieldEl.value = field;
+    if (sortDirEl)   sortDirEl.value   = dir;
+    localStorage.setItem(SORT_KEY, JSON.stringify(normalized));
+  }
+
+  function initSortUI() {
+    // Sync UI to saved/default state
+    writeSortState(readSortState());
+    // Wire changes
+    sortFieldEl?.addEventListener('change', () => {
+      writeSortState({ field: sortFieldEl.value, dir: sortDirEl.value });
+      render();
+    });
+    sortDirEl?.addEventListener('change', () => {
+      writeSortState({ field: sortFieldEl.value, dir: sortDirEl.value });
+      render();
+    });
+  }
 
   function applySort(list) {
     const { field, dir } = readSortState();
-    const mult = dir === 'asc' ? 1 : -1;
-    const arr = list.slice();
+    const mult = dir === 'desc' ? -1 : 1;
+    const arr  = list.slice();
 
     if (field === 'status') {
       arr.sort((a,b) => {
@@ -147,13 +172,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (A > B) return  1;
         return String(a.id).localeCompare(String(b.id));
       });
-    } else { // 'name'
+    } else {
       arr.sort((a,b) => {
         const A = nameKey(a), B = nameKey(b);
         if (A < B) return -1 * mult;
         if (A > B) return  1 * mult;
         const s = statusIndex(a.status) - statusIndex(b.status);
-        return s !== 0 ? s : String(a.id).localeCompare(String(b.id));
+        if (s !== 0) return s;
+        return String(a.id).localeCompare(String(b.id));
       });
     }
     return arr;
@@ -166,7 +192,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   function setHireFilter(val) {
     localStorage.setItem(HIRE_FILTER_KEY, val);
-    // update segmented active state + aria
     hireFilterEl?.querySelectorAll('.seg').forEach(btn => {
       const active = btn.dataset.filter === val;
       btn.classList.toggle('active', active);
@@ -175,8 +200,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   // init from storage
   setHireFilter(getHireFilter());
-
-  // clicks on segmented
   hireFilterEl?.addEventListener('click', (e) => {
     const btn = e.target.closest('.seg[data-filter]');
     if (!btn) return;
@@ -418,6 +441,8 @@ document.addEventListener('DOMContentLoaded', () => {
     await fetchMe();
     updateAuthUI();
     syncViewToggle();
+    // make sure the Sort + Order dropdowns are synced and wired before first render
+    initSortUI();
     await load();
   })();
 
