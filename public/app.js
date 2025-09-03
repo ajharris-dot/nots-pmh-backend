@@ -377,11 +377,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const statusBadge = isFilled(job)
           ? `<span class="badge badge-filled">Filled</span>`
           : `<span class="badge badge-open">Open</span>`;
-        const filledDateValue = job.filled_date
-          ? (/^\d{4}-\d{2}-\d{2}$/.test(job.filled_date)
-              ? job.filled_date
-              : String(job.filled_date).split('T')[0])
+        const dueDateValue = job.due_date
+          ? (/^\d{4}-\d{2}-\d{2}$/.test(job.due_date)
+              ? job.due_date
+              : String(job.due_date).split('T')[0])
           : '';
+
         const inputId = `file_${job.id}`;
         const actionsHtml = buildActionsHtml(job);
 
@@ -402,7 +403,7 @@ document.addEventListener('DOMContentLoaded', () => {
               <div class="meta">
                 <div><strong>Title:</strong> ${job.title || ''}</div>
                 <div><strong>Department:</strong> ${job.department || ''}</div>
-                <div><strong>Filled:</strong> ${filledDateValue || '—'}</div>
+                <div><strong>Filled:</strong> ${dueDateValue || '—'}</div>
                 <div><strong>Employee:</strong> ${job.employee || 'Unassigned'}</div>
               </div>
             </div>
@@ -430,7 +431,7 @@ document.addEventListener('DOMContentLoaded', () => {
               <div class="card-meta">
                 <div class="meta-row"><strong>Title:</strong> ${job.title || ''}</div>
                 <div class="meta-row"><strong>Department:</strong> ${job.department || ''}</div>
-                <div class="meta-row"><strong>Filled Date:</strong> ${filledDateValue || '—'}</div>
+                <div class="meta-row"><strong>Filled Date:</strong> ${dueDateValue || '—'}</div>
                 <div class="meta-row"><strong>Employee:</strong> ${job.employee || 'Unassigned'}</div>
               </div>
             </div>
@@ -458,7 +459,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('jobNumber').value = job.job_number || '';
       document.getElementById('jobTitle').value = job.title || '';
       document.getElementById('department').value = job.department || '';
-      document.getElementById('dueDate').value = fmtDate(job.filled_date);
+      document.getElementById('dueDate').value = fmtDate(job.due_date);
       document.getElementById('employee').value = job.employee || '';
     } else {
       modalTitle.textContent = 'Add Position';
