@@ -35,11 +35,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const grid      = document.getElementById('candidatesGrid');
   const search    = document.getElementById('search');
 
-  // Sort controls (new two-select UI)
+  // Hired filter + count
+  const hireFilterEl = document.getElementById('hireFilter'); // segmented buttons
+  const candCountEl  = document.getElementById('candCount');
+
+  // Pretty sort controls
   const sortFieldEl = document.getElementById('sortField'); // 'name' | 'status'
   const sortDirEl   = document.getElementById('sortDir');   // 'asc' | 'desc'
-  // Legacy single select (fallback): values like 'name_asc', 'name_desc', 'status_asc', 'status_desc'
-  const sortComboEl = document.getElementById('candSort');
 
   // auth UI
   const loginBtn    = document.getElementById('loginBtn');
@@ -110,46 +112,26 @@ document.addEventListener('DOMContentLoaded', () => {
     return idx >= 0 ? idx : STATUS_ORDER.length + 1;
   };
 
-  /* ---------- Sort state (supports new + legacy controls) ---------- */
+  /* ---------- Sort state ---------- */
   const SORT_KEY = 'employmentSortState';
-  // canonical shape: { field: 'name' | 'status', dir: 'asc' | 'desc' }
   function readSortState() {
-    // 1) Try new UI
-    const sf = sortFieldEl?.value;
-    const sd = sortDirEl?.value;
-    if (sf && sd) return { field: sf, dir: sd };
-
-    // 2) Legacy single select
-    const combo = sortComboEl?.value || localStorage.getItem('employmentSortMode') || 'name_asc';
-    const [field, dir] = combo.split('_');
-    return { field: field || 'name', dir: dir || 'asc' };
-  }
-  function writeSortState(state) {
-    // reflect in new UI if present
-    if (sortFieldEl) sortFieldEl.value = state.field;
-    if (sortDirEl)   sortDirEl.value   = state.dir;
-
-    // reflect for legacy dropdown if present
-    const legacy = `${state.field}_${state.dir}`;
-    if (sortComboEl) sortComboEl.value = legacy;
-
-    // persist (new key)
-    localStorage.setItem(SORT_KEY, JSON.stringify(state));
-    // keep legacy key in sync so older code doesn’t break if present
-    localStorage.setItem('employmentSortMode', legacy);
-  }
-  // initialize sort state from storage or defaults
-  (function initSortState() {
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem(SORT_KEY) || 'null'); } catch {}
-    const state = saved && saved.field && saved.dir ? saved : readSortState();
-    writeSortState(state);
-  })();
+    const field = saved?.field || sortFieldEl?.value || 'name';
+    const dir   = saved?.dir   || sortDirEl?.value   || 'asc';
+    return { field, dir };
+  }
+  function writeSortState(state) {
+    localStorage.setItem(SORT_KEY, JSON.stringify(state));
+    if (sortFieldEl) sortFieldEl.value = state.field;
+    if (sortDirEl)   sortDirEl.value   = state.dir;
+  }
+  // initialize
+  writeSortState(readSortState());
 
   // listeners
   sortFieldEl?.addEventListener('change', () => { writeSortState(readSortState()); render(); });
-  sortDirEl?.addEventListener('change',   () => { writeSortState(readSortState()); render(); });
-  sortComboEl?.addEventListener('change', () => { writeSortState(readSortState()); render(); });
+  sortDirEl  ?.addEventListener('change', () => { writeSortState(readSortState()); render(); });
 
   function applySort(list) {
     const { field, dir } = readSortState();
@@ -160,10 +142,9 @@ document.addEventListener('DOMContentLoaded', () => {
       arr.sort((a,b) => {
         const s = (statusIndex(a.status) - statusIndex(b.status)) * mult;
         if (s !== 0) return s;
-        // tie-break name then id to keep stable
         const A = nameKey(a), B = nameKey(b);
         if (A < B) return -1;
-        if (A > B) return 1;
+        if (A > B) return  1;
         return String(a.id).localeCompare(String(b.id));
       });
     } else { // 'name'
@@ -177,6 +158,31 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     return arr;
   }
+
+  /* ---------- Hired filter state ---------- */
+  const HIRE_FILTER_KEY = 'employmentHireFilter'; // 'all' | 'hired' | 'not_hired'
+  function getHireFilter() {
+    return localStorage.getItem(HIRE_FILTER_KEY) || 'all';
+  }
+  function setHireFilter(val) {
+    localStorage.setItem(HIRE_FILTER_KEY, val);
+    // update segmented active state + aria
+    hireFilterEl?.querySelectorAll('.seg').forEach(btn => {
+      const active = btn.dataset.filter === val;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-selected', String(active));
+    });
+  }
+  // init from storage
+  setHireFilter(getHireFilter());
+
+  // clicks on segmented
+  hireFilterEl?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.seg[data-filter]');
+    if (!btn) return;
+    setHireFilter(btn.dataset.filter);
+    render();
+  });
 
   /* ---------- Nav ---------- */
   backBtn?.addEventListener('click', () => (window.location.href = '/'));
@@ -235,7 +241,6 @@ document.addEventListener('DOMContentLoaded', () => {
       loginBtn?.setAttribute('style','');
       logoutBtn?.setAttribute('style','display:none');
     }
-    // Add Candidate visible for admin + employment
     if (canCand('candidate_create')) {
       addBtn?.setAttribute('style','');
     } else {
@@ -438,16 +443,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function render() {
     const q = (search?.value || '').toLowerCase().trim();
+    const filterMode = getHireFilter(); // 'all' | 'hired' | 'not_hired'
     grid.innerHTML = '';
 
     grid.classList.toggle('card-grid', VIEW_MODE === 'card');
     grid.classList.toggle('list-grid', VIEW_MODE === 'list');
 
+    // base search
     let list = ALL.filter(c => {
       const t = `${c.full_name || ''} ${c.email || ''} ${c.phone || ''}`.toLowerCase();
       return !q || t.includes(q);
     });
 
+    // hired/not-hired filter
+    if (filterMode === 'hired') {
+      list = list.filter(c => String(c.status || '').toLowerCase() === 'hired');
+    } else if (filterMode === 'not_hired') {
+      list = list.filter(c => String(c.status || '').toLowerCase() !== 'hired');
+    }
+
+    // update live count pill
+    const total = list.length;
+    if (candCountEl) {
+      candCountEl.textContent = `${total} ${total === 1 ? 'candidate' : 'candidates'}`;
+    }
+
+    // sort
     list = applySort(list);
 
     if (!list.length) {
@@ -455,6 +476,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    // render
     list.forEach(c => {
       const actionsHtml = (canCand('candidate_edit') || canCand('candidate_delete') || canCand('candidate_advance') || canCand('candidate_revert'))
         ? `

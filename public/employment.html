@@ -17,11 +17,11 @@
     <div class="topbar-actions">
       <button id="backToHubBtn" class="secondary">← Positions</button>
 
-    <!-- View toggle -->
-    <div class="view-toggle" role="group" aria-label="View toggle">
-      <button id="candCardViewBtn" class="secondary">Cards</button>
-      <button id="candListViewBtn" class="secondary">List</button>
-    </div>    
+      <!-- View toggle -->
+      <div class="view-toggle" role="group" aria-label="View toggle">
+        <button id="candCardViewBtn" class="secondary">Cards</button>
+        <button id="candListViewBtn" class="secondary">List</button>
+      </div>
 
       <!-- Optional auth controls (employment.js will handle visibility/logic) -->
       <button id="loginBtn" class="secondary">Log In</button>
@@ -31,18 +31,53 @@
     </div>
   </header>
 
-  <label for="candSort" class="muted" style="margin-right:8px;">Sort by:</label>
-  <select id="candSort">
-    <option value="name_asc">Name (A–Z)</option>
-    <option value="name_desc">Name (Z–A)</option>
-    <option value="status_asc">Hire process (Pending → Hired)</option>
-    <option value="status_desc">Hire process (Hired → Pending)</option>
-  </select>
-
-
   <main class="content">
-    <div class="toolbar">
-      <input id="search" placeholder="Search name / email / phone"/>
+    <!-- Unified toolbar: search, hired filter, count, pretty sort -->
+    <div class="toolbar toolbar-flex">
+      <div class="toolbar-left">
+        <input id="search" class="search-input" placeholder="Search name / email / phone"/>
+
+        <!-- Hired filter -->
+        <div id="hireFilter" class="segmented" role="tablist" aria-label="Hired filter">
+          <button class="seg active" data-filter="all" role="tab" aria-selected="true">All</button>
+          <button class="seg" data-filter="hired" role="tab" aria-selected="false">Hired</button>
+          <button class="seg" data-filter="not_hired" role="tab" aria-selected="false">Not hired</button>
+        </div>
+
+        <!-- Live candidate count -->
+        <div id="candCount" class="count-pill" aria-live="polite">0 candidates</div>
+      </div>
+
+      <div class="toolbar-right">
+        <!-- Pretty sort controls -->
+        <div class="sort-controls">
+          <label class="select">
+            <span class="select-label">Sort</span>
+            <div class="select-wrap">
+              <select id="sortField" aria-label="Sort by">
+                <option value="name">Name</option>
+                <option value="status">Hire Process</option>
+              </select>
+              <svg class="caret" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </div>
+          </label>
+
+          <label class="select">
+            <span class="select-label">Order</span>
+            <div class="select-wrap">
+              <select id="sortDir" aria-label="Sort order">
+                <option value="asc">A → Z / Pending → Hired</option>
+                <option value="desc">Z → A / Hired → Pending</option>
+              </select>
+              <svg class="caret" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </div>
+          </label>
+        </div>
+      </div>
     </div>
 
     <!-- Candidate cards/list -->
@@ -91,43 +126,7 @@
     </div>
   </div>
 
-  <!-- Sort Bar -->
-  <div id="sortBar" class="sort-bar">
-    <div class="sort-title">Sort</div>
-
-    <div class="sort-controls">
-      <label class="select">
-        <span class="select-label">By</span>
-        <div class="select-wrap">
-          <select id="sortField" aria-label="Sort by">
-            <option value="name">Name</option>
-            <option value="status">Hire Process</option>
-          </select>
-          <!-- caret -->
-          <svg class="caret" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </div>
-      </label>
-
-      <label class="select">
-        <span class="select-label">Order</span>
-        <div class="select-wrap">
-          <select id="sortDir" aria-label="Sort order">
-            <option value="asc">A → Z / Pending → Hired</option>
-            <option value="desc">Z → A / Hired → Pending</option>
-          </select>
-          <!-- caret -->
-          <svg class="caret" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </div>
-      </label>
-    </div>
-  </div>
-
-
-  <!-- Optional: reuse your login modal if you want auth here too -->
+  <!-- Login Modal -->
   <div id="loginModal" class="modal hidden" aria-hidden="true">
     <div class="modal-card">
       <h2>Log In</h2>

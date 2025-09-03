@@ -463,3 +463,166 @@ button:disabled{ opacity:0.55; cursor:not-allowed; }
   }
 }
 
+/* Hide legacy single dropdown; using the new bar */
+#candSort { display: none !important; }
+
+/* --- Stats / filter strip (count + hired filter) --- */
+.stats-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 8px 0 0;
+}
+
+/* Count pill */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text);
+  font-weight: 600;
+  font-size: 13px;
+  box-shadow: 0 1px 2px rgba(16,24,40,.04);
+}
+
+/* Segmented control (Hired / Not hired / All) */
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(16,24,40,.04);
+}
+
+.segmented .seg {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  color: var(--text);
+  border: 0;
+  padding: 8px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .12s ease, color .12s ease;
+  outline: none;
+}
+
+.segmented .seg + .seg {
+  border-left: 1px solid var(--line);
+}
+
+.segmented .seg:hover {
+  background: #fafafa;
+}
+
+.segmented .seg.active,
+.segmented .seg[aria-selected="true"] {
+  background: var(--accent);
+  color: #fff;
+}
+
+.segmented .seg:focus-visible {
+  box-shadow: inset 0 0 0 2px #fff, 0 0 0 3px rgba(99,102,241,.3);
+}
+
+/* Make the sort bar breathe a bit with the new strip */
+.sort-bar {
+  gap: 10px 16px;
+}
+
+.sort-controls { align-items: end; }
+
+/* Dark mode tweaks */
+@media (prefers-color-scheme: dark) {
+  .pill {
+    background: #0b0f1a;
+    border-color: #323644;
+    color: #e5e7eb;
+  }
+  .segmented {
+    background: #0b0f1a;
+    border-color: #323644;
+  }
+  .segmented .seg { color: #e5e7eb; }
+  .segmented .seg:hover { background: #0c1220; }
+}
+
+/* ===== Employment toolbar layout (left: search+filter+count, right: sort) ===== */
+.toolbar-flex{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+  margin-bottom:16px; /* a little breathing room above the grid */
+}
+
+.toolbar-left{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  flex-wrap:wrap;
+  min-width:0; /* prevents overflow when narrow */
+}
+
+.toolbar-right{
+  display:flex;
+  align-items:flex-end;
+  gap:12px;
+  flex-wrap:wrap;
+}
+
+/* Search input in the employment toolbar */
+.search-input{
+  flex:1 1 280px;    /* grows but won’t get too tiny */
+  min-width:200px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:10px 12px;
+  outline:none;
+}
+
+/* Count pill used by #candCount */
+.count-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:6px 10px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:#fff;
+  color:var(--text);
+  font-weight:600;
+  font-size:13px;
+  box-shadow:0 1px 2px rgba(16,24,40,.04);
+}
+
+/* Reuse your segmented control styles (already defined)
+   but make sure buttons inside look good on small screens */
+.segmented .seg{ white-space:nowrap; }
+
+/* Sort controls: make selects align nicely with the left side */
+.sort-controls{
+  display:flex;
+  gap:10px;
+  align-items:flex-end;
+  flex-wrap:wrap;
+}
+.select-wrap select{ min-width:200px; }
+
+/* Dark mode tweaks for the count pill to match the rest */
+@media (prefers-color-scheme: dark) {
+  .count-pill{
+    background:#0b0f1a;
+    border-color:#323644;
+    color:#e5e7eb;
+  }
+}
+
+
