@@ -13,6 +13,7 @@ const PLACEHOLDER = './placeholder-v2.png?v=20250814';
 const VIEW_KEY = 'employmentViewMode';
 let VIEW_MODE = localStorage.getItem(VIEW_KEY) || 'list';
 
+// ---- auth helpers ----
 const getToken   = () => localStorage.getItem(TOKEN_KEY) || '';
 const setToken   = (t) => localStorage.setItem(TOKEN_KEY, t);
 const clearToken = () => localStorage.removeItem(TOKEN_KEY);
@@ -28,15 +29,19 @@ let CURRENT_USER = null;
 let ALL = [];
 
 document.addEventListener('DOMContentLoaded', () => {
+  /* ---------- El refs ---------- */
   const backBtn   = document.getElementById('backToHubBtn');
   const addBtn    = document.getElementById('addCandidateBtn');
   const grid      = document.getElementById('candidatesGrid');
   const search    = document.getElementById('search');
-  const sortSelect = document.getElementById('candSort');
-  const SORT_KEY = 'employmentSortMode';
-  let SORT_MODE = localStorage.getItem(SORT_KEY) || 'name_asc';
 
-  // Optional auth UI
+  // Sort controls (new two-select UI)
+  const sortFieldEl = document.getElementById('sortField'); // 'name' | 'status'
+  const sortDirEl   = document.getElementById('sortDir');   // 'asc' | 'desc'
+  // Legacy single select (fallback): values like 'name_asc', 'name_desc', 'status_asc', 'status_desc'
+  const sortComboEl = document.getElementById('candSort');
+
+  // auth UI
   const loginBtn    = document.getElementById('loginBtn');
   const logoutBtn   = document.getElementById('logoutBtn');
   const loginModal  = document.getElementById('loginModal');
@@ -60,6 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusEl = document.getElementById('candStatus');
   const notesEl  = document.getElementById('candNotes');
 
+  /* ---------- Status model ---------- */
   const STATUS_ORDER = [
     'pending_pre_employment',
     'pending_onboarding',
@@ -80,57 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
   /* ---------- Helpers ---------- */
   const roleLower = () => (CURRENT_USER?.role || '').toString().trim().toLowerCase();
 
-  // NEW: helpers to map/compare for sort
-  function nameKey(c) {
-    return String(c?.full_name || '').trim().toLowerCase();
-  }
-  function statusIndex(s) {
-    const idx = STATUS_ORDER.indexOf(s);
-    return idx >= 0 ? idx : STATUS_ORDER.length + 1; // unknowns go to end
-  }
-  function applySort(list) {
-    const mode = SORT_MODE;
-    const arr = list.slice();
-
-    if (mode === 'name_asc' || mode === 'name_desc') {
-      arr.sort((a, b) => {
-        const A = nameKey(a);
-        const B = nameKey(b);
-        if (A < B) return mode === 'name_asc' ? -1 : 1;
-        if (A > B) return mode === 'name_asc' ? 1 : -1;
-        // tie-breaker by status order then id to keep stable
-        const s = statusIndex(a.status) - statusIndex(b.status);
-        return s !== 0 ? s : (String(a.id).localeCompare(String(b.id)));
-      });
-    } else if (mode === 'status_asc' || mode === 'status_desc') {
-      const mult = (mode === 'status_asc') ? 1 : -1; // pending→hired vs reverse
-      arr.sort((a, b) => {
-        const s = (statusIndex(a.status) - statusIndex(b.status)) * mult;
-        if (s !== 0) return s;
-        // tie-breaker by name then id
-        const A = nameKey(a), B = nameKey(b);
-        if (A < B) return -1;
-        if (A > B) return 1;
-        return String(a.id).localeCompare(String(b.id));
-      });
-    }
-    return arr;
-  }
-
-  // NEW: initialize + listen for sort changes
-  if (sortSelect) {
-    // reflect saved mode in the UI
-    try { sortSelect.value = SORT_MODE; } catch {}
-    sortSelect.addEventListener('change', () => {
-      SORT_MODE = sortSelect.value || 'name_asc';
-      localStorage.setItem(SORT_KEY, SORT_MODE);
-      render();
-    });
-  }
-
- 
-
- // Admin & Employment can manage candidates; Operations cannot
+  // Permissions: Admin + Employment can manage candidates; Operations cannot
   function canCand(action) {
     const r = roleLower();
     if (!r) return false;
@@ -145,7 +101,81 @@ document.addEventListener('DOMContentLoaded', () => {
         'candidate_revert'
       ]).has(action);
     }
-    return false; // operations have no access here
+    return false;
+  }
+
+  const nameKey = (c) => String(c?.full_name || '').trim().toLowerCase();
+  const statusIndex = (s) => {
+    const idx = STATUS_ORDER.indexOf(String(s || ''));
+    return idx >= 0 ? idx : STATUS_ORDER.length + 1;
+  };
+
+  /* ---------- Sort state (supports new + legacy controls) ---------- */
+  const SORT_KEY = 'employmentSortState';
+  // canonical shape: { field: 'name' | 'status', dir: 'asc' | 'desc' }
+  function readSortState() {
+    // 1) Try new UI
+    const sf = sortFieldEl?.value;
+    const sd = sortDirEl?.value;
+    if (sf && sd) return { field: sf, dir: sd };
+
+    // 2) Legacy single select
+    const combo = sortComboEl?.value || localStorage.getItem('employmentSortMode') || 'name_asc';
+    const [field, dir] = combo.split('_');
+    return { field: field || 'name', dir: dir || 'asc' };
+  }
+  function writeSortState(state) {
+    // reflect in new UI if present
+    if (sortFieldEl) sortFieldEl.value = state.field;
+    if (sortDirEl)   sortDirEl.value   = state.dir;
+
+    // reflect for legacy dropdown if present
+    const legacy = `${state.field}_${state.dir}`;
+    if (sortComboEl) sortComboEl.value = legacy;
+
+    // persist (new key)
+    localStorage.setItem(SORT_KEY, JSON.stringify(state));
+    // keep legacy key in sync so older code doesn’t break if present
+    localStorage.setItem('employmentSortMode', legacy);
+  }
+  // initialize sort state from storage or defaults
+  (function initSortState() {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(SORT_KEY) || 'null'); } catch {}
+    const state = saved && saved.field && saved.dir ? saved : readSortState();
+    writeSortState(state);
+  })();
+
+  // listeners
+  sortFieldEl?.addEventListener('change', () => { writeSortState(readSortState()); render(); });
+  sortDirEl?.addEventListener('change',   () => { writeSortState(readSortState()); render(); });
+  sortComboEl?.addEventListener('change', () => { writeSortState(readSortState()); render(); });
+
+  function applySort(list) {
+    const { field, dir } = readSortState();
+    const mult = dir === 'asc' ? 1 : -1;
+    const arr = list.slice();
+
+    if (field === 'status') {
+      arr.sort((a,b) => {
+        const s = (statusIndex(a.status) - statusIndex(b.status)) * mult;
+        if (s !== 0) return s;
+        // tie-break name then id to keep stable
+        const A = nameKey(a), B = nameKey(b);
+        if (A < B) return -1;
+        if (A > B) return 1;
+        return String(a.id).localeCompare(String(b.id));
+      });
+    } else { // 'name'
+      arr.sort((a,b) => {
+        const A = nameKey(a), B = nameKey(b);
+        if (A < B) return -1 * mult;
+        if (A > B) return  1 * mult;
+        const s = statusIndex(a.status) - statusIndex(b.status);
+        return s !== 0 ? s : String(a.id).localeCompare(String(b.id));
+      });
+    }
+    return arr;
   }
 
   /* ---------- Nav ---------- */
@@ -180,9 +210,8 @@ document.addEventListener('DOMContentLoaded', () => {
     loginModal?.classList.remove('hidden');
     setTimeout(() => document.getElementById('loginEmail')?.focus(), 50);
   }
-  function closeLoginModal() {
-    loginModal?.classList.add('hidden');
-  }
+  function closeLoginModal() { loginModal?.classList.add('hidden'); }
+
   async function fetchMe() {
     if (!isAuthed()) { CURRENT_USER = null; return; }
     try {
@@ -197,6 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
       CURRENT_USER = null;
     }
   }
+
   function updateAuthUI() {
     if (isAuthed()) {
       loginBtn?.setAttribute('style','display:none');
@@ -205,7 +235,7 @@ document.addEventListener('DOMContentLoaded', () => {
       loginBtn?.setAttribute('style','');
       logoutBtn?.setAttribute('style','display:none');
     }
-    // Show "Add Candidate" for admin + employment
+    // Add Candidate visible for admin + employment
     if (canCand('candidate_create')) {
       addBtn?.setAttribute('style','');
     } else {
@@ -213,6 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Auth events
   loginBtn?.addEventListener('click', openLoginModal);
   cancelLogin?.addEventListener('click', closeLoginModal);
   loginForm?.addEventListener('submit', async (e) => {
@@ -259,7 +290,6 @@ document.addEventListener('DOMContentLoaded', () => {
     openModal();
   });
   cancelBtn?.addEventListener('click', closeModal);
-
   modal?.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !modal?.classList.contains('hidden')) closeModal();
@@ -323,7 +353,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ---------- Grid actions ---------- */
   grid?.addEventListener('click', async (e) => {
-    const btn = e.target.closest('button');
+    const btn = e.target.closest('button[data-action]');
     if (!btn) return;
     const action = btn.dataset.action;
     const id = btn.dataset.id;
@@ -337,6 +367,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (!isAuthed()) { openLoginModal(); return; }
+
     if (action === 'delete') {
       if (!canCand('candidate_delete')) { alert('Access denied.'); return; }
       if (!confirm('Delete candidate?')) return;
@@ -351,7 +382,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (action === 'advance' || action === 'revert') {
-      if (!(canCand('candidate_advance') && canCand('candidate_revert'))) {
+      if (!(canCand('candidate_advance') || canCand('candidate_revert'))) {
         alert('Access denied.');
         return;
       }
@@ -412,13 +443,11 @@ document.addEventListener('DOMContentLoaded', () => {
     grid.classList.toggle('card-grid', VIEW_MODE === 'card');
     grid.classList.toggle('list-grid', VIEW_MODE === 'list');
 
-    // existing filter:
     let list = ALL.filter(c => {
       const t = `${c.full_name || ''} ${c.email || ''} ${c.phone || ''}`.toLowerCase();
       return !q || t.includes(q);
     });
 
-    // NEW: apply selected sort
     list = applySort(list);
 
     if (!list.length) {
@@ -426,11 +455,8 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // ... keep your existing list/card rendering below ...
-
-
     list.forEach(c => {
-      const actionsHtml = canCand('candidate_edit') || canCand('candidate_delete') || canCand('candidate_advance') || canCand('candidate_revert')
+      const actionsHtml = (canCand('candidate_edit') || canCand('candidate_delete') || canCand('candidate_advance') || canCand('candidate_revert'))
         ? `
           <button class="secondary" data-action="revert"  data-id="${c.id}">◀︎ Step Back</button>
           <button class="secondary" data-action="advance" data-id="${c.id}">Step Forward ▶︎</button>
@@ -497,7 +523,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function statusBadge(s) {
-    const label = STATUS_LABEL[s] || s;
+    const label = STATUS_LABEL[s] || s || 'Unknown';
     const cls =
       s === 'hired' ? 'badge-open' :
       s === 'did_not_start' ? 'badge-filled' : '';

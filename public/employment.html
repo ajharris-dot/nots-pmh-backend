@@ -91,6 +91,42 @@
     </div>
   </div>
 
+  <!-- Sort Bar -->
+  <div id="sortBar" class="sort-bar">
+    <div class="sort-title">Sort</div>
+
+    <div class="sort-controls">
+      <label class="select">
+        <span class="select-label">By</span>
+        <div class="select-wrap">
+          <select id="sortField" aria-label="Sort by">
+            <option value="name">Name</option>
+            <option value="status">Hire Process</option>
+          </select>
+          <!-- caret -->
+          <svg class="caret" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+      </label>
+
+      <label class="select">
+        <span class="select-label">Order</span>
+        <div class="select-wrap">
+          <select id="sortDir" aria-label="Sort order">
+            <option value="asc">A → Z / Pending → Hired</option>
+            <option value="desc">Z → A / Hired → Pending</option>
+          </select>
+          <!-- caret -->
+          <svg class="caret" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+      </label>
+    </div>
+  </div>
+
+
   <!-- Optional: reuse your login modal if you want auth here too -->
   <div id="loginModal" class="modal hidden" aria-hidden="true">
     <div class="modal-card">
