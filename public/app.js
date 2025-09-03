@@ -13,7 +13,6 @@ fetch('/healthz').then(r => console.log('healthz', r.status)).catch(console.erro
 const API = '/api/jobs';
 const AUTH = '/api/auth';
 const USERS = '/api/users';
-// NOTE: we are no longer using /api/permissions in this UI.
 const PLACEHOLDER = './placeholder-v2.png?v=20250814';
 
 let ALL_JOBS = [];
@@ -41,22 +40,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const loginForm = document.getElementById('loginForm');
   const cancelLogin = document.getElementById('cancelLogin');
 
-  // Admin Hub (keep button, admin-only)
+  // Admin Hub (admin-only)
   const adminHubBtn = document.getElementById('adminHubBtn');
-
-  // Users sub-section (admin)
-  const userForm = document.getElementById('userForm');
-  const usersList = document.getElementById('usersList');
-  const userIdEl = document.getElementById('userId');
-  const userEmailEl = document.getElementById('userEmail');
-  const userNameEl = document.getElementById('userName');
-  const userRoleEl = document.getElementById('userRole');
-  const userPasswordEl = document.getElementById('userPassword');
 
   // Employment Page Button
   const employmentPageBtn = document.getElementById('employmentPageBtn');
 
-  // View toggle buttons
+  // View toggles
   const cardViewBtn = document.getElementById('cardViewBtn');
   const listViewBtn = document.getElementById('listViewBtn');
 
@@ -66,6 +56,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const cancelAssign = document.getElementById('cancelAssign');
   const assignSelect = document.getElementById('assignCandidate');
   let ASSIGN_JOB_ID = null;
+
+  /* ------- Auth helpers ------- */
+  const getToken = () => localStorage.getItem(TOKEN_KEY) || '';
+  const setToken = (t) => localStorage.setItem(TOKEN_KEY, t);
+  const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+  const isAuthed = () => !!getToken();
+
+  async function authFetch(url, options = {}) {
+    const token = getToken();
+    const headers = new Headers(options.headers || {});
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+    return fetch(url, { ...options, headers });
+  }
 
   function roleLower() {
     return (CURRENT_USER?.role || '').toString().trim().toLowerCase();
@@ -84,100 +87,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function openAssignModal(jobId){
-    ASSIGN_JOB_ID = jobId;
-    assignForm?.reset();
-    assignModal?.classList.remove('hidden');
-    loadCandidateOptions().then(() => assignSelect?.focus());
-  }
-  function closeAssignModal(){
-    ASSIGN_JOB_ID = null;
-    assignModal?.classList.add('hidden');
-  }
-
-  // Candidate list for assign:
-  // - only "hired"
-  // - not already assigned to ANY job (based on ALL_JOBS employee names)
-  async function loadCandidateOptions(){
-    if (!assignSelect) return;
-    assignSelect.innerHTML = `<option value="" disabled selected>Loading…</option>`;
-
-    try {
-      // Build a set of currently assigned names from the already-loaded jobs
-      const assignedNames = new Set(
-        ALL_JOBS
-          .filter(j => String(j.status || '').toLowerCase() === 'filled' && (j.employee || '').trim())
-          .map(j => (j.employee || '').trim().toLowerCase())
-      );
-
-      const res = await authFetch('/api/candidates');
-      if (!res.ok) {
-        assignSelect.innerHTML = `<option value="" disabled selected>Failed to load candidates</option>`;
-        return;
-      }
-
-      const list = await res.json();
-      const arr = Array.isArray(list) ? list : [];
-      // eligible: Hired and not already assigned
-      const eligible = arr.filter(c =>
-        String(c.status || '').toLowerCase() === 'hired' &&
-        !assignedNames.has((c.full_name || '').trim().toLowerCase())
-      );
-
-      eligible.sort((a,b) => String(a.full_name||'').localeCompare(String(b.full_name||'')));
-
-      assignSelect.innerHTML = eligible.length
-        ? `<option value="" disabled selected>Select a candidate…</option>`
-        : `<option value="" disabled selected>No eligible candidates</option>`;
-
-      for (const c of eligible) {
-        const opt = document.createElement('option');
-        opt.value = c.id; // keep the id!
-        opt.textContent = c.full_name || '(Unnamed)';
-        opt.dataset.name = c.full_name || '';
-        opt.selected = false;
-        assignSelect.appendChild(opt);
-      }
-    } catch (err) {
-      console.error('loadCandidateOptions threw:', err);
-      assignSelect.innerHTML = `<option value="" disabled selected>Error loading candidates</option>`;
-    }
-  }
-
-  /* ------- Auth helpers ------- */
-  const getToken = () => localStorage.getItem(TOKEN_KEY) || '';
-  const setToken = (t) => localStorage.setItem(TOKEN_KEY, t);
-  const clearToken = () => localStorage.removeItem(TOKEN_KEY);
-  const isAuthed = () => !!getToken();
-
-  async function authFetch(url, options = {}) {
-    const token = getToken();
-    const headers = new Headers(options.headers || {});
-    if (token) headers.set('Authorization', `Bearer ${token}`);
-    return fetch(url, { ...options, headers });
-  }
-
-  async function fetchMe() {
-    if (!isAuthed()) { CURRENT_USER = null; return; }
-    try {
-      const res = await authFetch(`${AUTH}/me`);
-      if (!res.ok) throw new Error('me failed');
-      const data = await res.json();
-      CURRENT_USER = data?.authenticated ? data.user : null;
-    } catch {
-      CURRENT_USER = null;
-    }
-  }
-
   /* ------- Ability checks (role-based) ------- */
   // Admin: everything
-  // Operations: job_create, job_edit, job_delete, job_unassign
-  // Employment: no job writes here
+  // Operations: job_create, job_edit, job_delete, job_unassign, job_assign, photo_upload
   function can(abilityKey) {
     const ROLE = roleLower();
     if (!ROLE) return false;
     if (ROLE === 'admin') return true;
-    const OPS = new Set(['job_create','job_edit','job_delete','job_unassign']);
+    const OPS = new Set([
+      'job_create','job_edit','job_delete','job_unassign','job_assign','photo_upload'
+    ]);
     if (ROLE === 'operations') return OPS.has(abilityKey);
     return false; // employment has no job abilities here
   }
@@ -282,6 +201,74 @@ document.addEventListener('DOMContentLoaded', () => {
     filledTab.textContent = `Filled (${filledCount})`;
   }
 
+  /* ====== Assign modal helpers ====== */
+  function openAssignModal(jobId){
+    ASSIGN_JOB_ID = jobId;
+    assignForm?.reset();
+    assignModal?.classList.remove('hidden');
+    loadCandidateOptions().then(() => assignSelect?.focus());
+  }
+  function closeAssignModal(){
+    ASSIGN_JOB_ID = null;
+    assignModal?.classList.add('hidden');
+  }
+
+  // Candidate list for assign:
+  // - only "hired"
+  // - not already assigned to ANY job (based on ALL_JOBS employee names)
+  async function loadCandidateOptions(){
+    if (!assignSelect) return;
+    assignSelect.innerHTML = `<option value="" disabled selected>Loading…</option>`;
+
+    try {
+      const assignedNames = new Set(
+        ALL_JOBS
+          .filter(j => String(j.status || '').toLowerCase() === 'filled' && (j.employee || '').trim())
+          .map(j => (j.employee || '').trim().toLowerCase())
+      );
+
+      // This endpoint MUST be allowed for operations on the server (see backend change above)
+      const res = await authFetch('/api/candidates');
+
+      if (res.status === 401 || res.status === 403) {
+        assignSelect.innerHTML = `<option value="" disabled selected>Your role cannot list candidates (server)</option>`;
+        return;
+      }
+      if (!res.ok) {
+        const t = await res.text().catch(()=> '');
+        assignSelect.innerHTML = `<option value="" disabled selected>Failed to load candidates (${res.status})</option>`;
+        console.error('loadCandidateOptions:', res.status, t);
+        return;
+      }
+
+      const list = await res.json();
+      const arr = Array.isArray(list) ? list : [];
+
+      const eligible = arr.filter(c =>
+        String(c.status || '').toLowerCase() === 'hired' &&
+        !assignedNames.has((c.full_name || '').trim().toLowerCase())
+      );
+
+      eligible.sort((a,b) => String(a.full_name||'').localeCompare(String(b.full_name||'')));
+
+      assignSelect.innerHTML = eligible.length
+        ? `<option value="" disabled selected>Select a candidate…</option>`
+        : `<option value="" disabled selected>No eligible candidates</option>`;
+
+      for (const c of eligible) {
+        const opt = document.createElement('option');
+        opt.value = c.id; // keep the id
+        opt.textContent = c.full_name || '(Unnamed)';
+        opt.dataset.name = c.full_name || '';
+        opt.selected = false;
+        assignSelect.appendChild(opt);
+      }
+    } catch (err) {
+      console.error('loadCandidateOptions threw:', err);
+      assignSelect.innerHTML = `<option value="" disabled selected>Error loading candidates</option>`;
+    }
+  }
+
   /* ------- data ------- */
   async function loadJobs() {
     try {
@@ -325,12 +312,12 @@ document.addEventListener('DOMContentLoaded', () => {
       return `<button class="secondary login-gate-btn" data-action="open-login">Log in to manage</button>`;
     }
 
-    // Upload = admin only
-    const canUpload   = (ROLE === 'admin') && isFilled(job);
+    // Upload = admin or operations (and only useful when filled)
+    const canUpload   = (ROLE === 'admin' || ROLE === 'operations') && isFilled(job);
     // Edit/Delete = admin or operations
     const canEdit     = (ROLE === 'admin' || ROLE === 'operations');
     const canDelete   = (ROLE === 'admin' || ROLE === 'operations');
-    // Assign = admin only
+    // Assign = admin or operations
     const canAssign   = (ROLE === 'admin' || ROLE === 'operations');
     // Unassign = admin or operations
     const canUnassign = (ROLE === 'admin' || ROLE === 'operations');
@@ -489,7 +476,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const ROLE = roleLower();
     if (!isAuthed() || (ROLE !== 'admin' && ROLE !== 'operations')) { openLoginModal(); return; }
 
-    // Read form values
     const id         = document.getElementById('jobId')?.value?.trim();
     const job_number = document.getElementById('jobNumber')?.value?.trim() || null;
     const title      = document.getElementById('jobTitle')?.value?.trim()  || null;
@@ -497,13 +483,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const due_date   = document.getElementById('dueDate')?.value?.trim()   || null;
     const employee   = document.getElementById('employee')?.value?.trim()  || null;
 
-    // Build payloads aligned to your backend fields
     const createPayload = {
       title,
       job_number,
       department,
       due_date: due_date || null,
-      status: 'Open' // new jobs default to Open
+      status: 'Open'
     };
 
     const editPayload = {
@@ -517,16 +502,12 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       let res;
       if (id) {
-        // Editing
-        if (!(ROLE === 'admin' || ROLE === 'operations')) return;
         res = await authFetch(`${API}/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(editPayload)
         });
       } else {
-        // Creating
-        if (!(ROLE === 'admin' || ROLE === 'operations')) return;
         res = await authFetch(`${API}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -620,9 +601,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (action === 'open-login') { openLoginModal(); return; }
 
     if (action === 'trigger-upload') {
-      // Upload: admin + operations only (UI + server)
-      const ROLE = roleLower();
-      if (!isAuthed() || (ROLE !== 'admin' && ROLE !== 'operations')) { openLoginModal(); return; }
+      // Upload: admin OR operations
+      if (!isAuthed() || !can('photo_upload')) { openLoginModal(); return; }
       const input = document.getElementById(btn.dataset.input);
       if (input) input.click();
       return;
@@ -641,9 +621,7 @@ document.addEventListener('DOMContentLoaded', () => {
       loadJobs();
 
     } else if (action === 'assign') {
-      // Assign: admin only
-      const ROLE = roleLower();
-      if (!isAuthed() || (ROLE !== 'admin' && ROLE !== 'operations')) { openLoginModal(); return; }
+      if (!isAuthed() || !can('job_assign')) { openLoginModal(); return; }
       openAssignModal(id);
 
     } else if (action === 'unassign') {
@@ -657,8 +635,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Assign modal
   assignForm?.addEventListener('submit', async (e)=>{
     e.preventDefault();
-    const ROLE = roleLower();
-    if (!isAuthed() || (ROLE !== 'admin' && ROLE !== 'operations')) { openLoginModal(); return; }
+    if (!isAuthed() || !can('job_assign')) { openLoginModal(); return; }
     if (!ASSIGN_JOB_ID) return;
 
     const opt = assignSelect?.selectedOptions?.[0];
@@ -675,7 +652,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!res.ok) {
       const t = await res.text().catch(()=> '');
-      // Optional: nicer messages based on server error codes
       try {
         const j = JSON.parse(t || '{}');
         if (j.error === 'candidate_not_hired') return alert('Only Hired candidates can be assigned.');
@@ -692,12 +668,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   cancelAssign?.addEventListener('click', closeAssignModal);
 
-  // Upload change -> patch job (admin-only)
+  // Upload change -> patch job (admin OR operations)
   const jobGridChange = async (e) => {
     if (!e.target.classList.contains('photo-input')) return;
-    const ROLE = roleLower();
-    const canUpload = ROLE === 'admin';
-    if (!isAuthed() || !canUpload) { openLoginModal(); return; }
+    if (!isAuthed() || !can('photo_upload')) { openLoginModal(); return; }
 
     const id = e.target.dataset.id;
     const file = e.target.files?.[0];

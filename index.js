@@ -97,7 +97,7 @@ app.use('/api/users',
 /* ===== Candidates (Admin + Employment) ===== */
 app.use('/api/candidates',
   authMiddleware,
-  authorizeRoles('admin', 'employment'),
+  authorizeRoles('admin', 'employment', 'operations'),
   asMiddleware(candidatesRoutes, 'candidatesRoutes')
 );
 
@@ -105,7 +105,7 @@ app.use('/api/candidates',
 app.post(
   '/api/upload',
   authMiddleware,
-  authorizeRoles('admin'),
+  authorizeRoles('admin', 'operations'),
   upload.single('photo'),
   (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });

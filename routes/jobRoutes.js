@@ -359,4 +359,15 @@ router.post(
   }
 );
 
+// routes/jobRoutes.js
+router.get('/eligible-candidates',
+  authMiddleware,
+  authorizeRoles('admin', 'operations'),
+  async (req, res) => {
+    // return just hired, unassigned names/ids
+    // (use the same query rules you enforce in /assign)
+  }
+);
+
+
 module.exports = router;
