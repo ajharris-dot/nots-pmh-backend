@@ -482,6 +482,72 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   function closeModal() { jobModal.classList.add('hidden'); }
 
+  // ===== Add/Edit Position form submit =====
+  jobForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const ROLE = roleLower();
+    if (!isAuthed()) { openLoginModal(); return; }
+
+    // Read form values
+    const id         = document.getElementById('jobId')?.value?.trim();
+    const job_number = document.getElementById('jobNumber')?.value?.trim() || null;
+    const title      = document.getElementById('jobTitle')?.value?.trim()  || null;
+    const department = document.getElementById('department')?.value?.trim()|| null;
+    const due_date   = document.getElementById('dueDate')?.value?.trim()   || null;
+    const employee   = document.getElementById('employee')?.value?.trim()  || null;
+
+    // Build payloads aligned to your backend fields
+    const createPayload = {
+      title,
+      job_number,
+      department,
+      due_date: due_date || null,
+      status: 'Open' // new jobs default to Open
+    };
+
+    const editPayload = {
+      title,
+      job_number,
+      department,
+      due_date: due_date || null,
+      employee: employee || null
+    };
+
+    try {
+      let res;
+      if (id) {
+        // Editing
+        if (!(ROLE === 'admin' || ROLE === 'operations')) return;
+        res = await authFetch(`${API}/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(editPayload)
+        });
+      } else {
+        // Creating
+        if (!(ROLE === 'admin' || ROLE === 'operations')) return;
+        res = await authFetch(`${API}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(createPayload)
+        });
+      }
+
+      if (!res.ok) {
+        const t = await res.text().catch(()=>'');
+        alert(`Save failed: ${t || res.status}`);
+        return;
+      }
+
+      closeModal();
+      loadJobs();
+    } catch (err) {
+      console.error('job save error:', err);
+      alert('Save failed (network).');
+    }
+  });
+
   /* ------- events ------- */
   document.querySelectorAll('.filters .tab').forEach(btn => {
     btn.addEventListener('click', () => {
