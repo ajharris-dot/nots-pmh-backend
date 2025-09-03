@@ -622,7 +622,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (action === 'trigger-upload') {
       // Upload: admin only (UI + server)
       const ROLE = roleLower();
-      if (!isAuthed() || ROLE !== 'admin') { openLoginModal(); return; }
+      if (!isAuthed() || (ROLE !== 'admin' && ROLE !== 'operations')) { openLoginModal(); return; }
       const input = document.getElementById(btn.dataset.input);
       if (input) input.click();
       return;
