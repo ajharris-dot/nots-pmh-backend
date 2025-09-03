@@ -177,6 +177,38 @@ button:disabled{ opacity:0.55; cursor:not-allowed; }
   display: block; background: #f6f6f6;
 }
 
+/* Floating CTA: "Hard Day?" */
+.floating-cta{
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 18px;
+  z-index: 1100;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  border: 1px solid rgba(255,255,255,.15);
+  box-shadow: 0 6px 18px rgba(0,0,0,.18);
+  text-decoration: none;
+  transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+}
+.floating-cta:hover{
+  background: var(--accent-600);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px rgba(0,0,0,.22);
+}
+.floating-cta:active{
+  transform: translateY(0);
+}
+@media (prefers-reduced-motion: reduce){
+  .floating-cta{ transition: none; }
+}
+
 /* Bigger filter tabs */
 .filters .tab { padding: 8px 14px; font-size: 14px; line-height: 1.1; }
 
